@@ -3,7 +3,7 @@
 
 import { plan } from './planner.js';
 import { hide, show } from './reveal.js';
-import { perform } from './choreo.js';
+import { perform, moveBack, clearShift } from './choreo.js';
 
 // Stop whatever is happening on screen for a task and leave its element shown.
 function settle(task) {
@@ -31,6 +31,7 @@ export class Region {
     this.done = 0;
     this.building = 0;
     this.slips = 0; // deliberate mistakes played so far (see the `mistakes` option)
+    this.chores = new Set(); // containers built out of place, waiting to be moved back
     this.epoch = 0; // bumped to abandon builds that are mid-flight
     this.started = false;
     this.completed = false;
@@ -105,6 +106,13 @@ export class Region {
       // The observer only reports changes, so this has to be measured.
       else if (task.el.getBoundingClientRect().bottom <= 0) this.complete(task);
     }
+    // A container built out of place is moved once everything inside it is built.
+    for (const chore of this.chores) {
+      if (chore.running || chore.task.left > 0) continue;
+      const r = chore.task.el.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < window.innerHeight) queue.push(chore);
+      else this.dropChore(chore); // nobody is looking: just put it right
+    }
   }
 
   async build(task, agent) {
@@ -114,6 +122,10 @@ export class Region {
       speed: () => this.opts.speed,
       mistakes: () => Math.min(1, Math.max(0, Number(this.opts.mistakes) || 0)),
       slipped: () => this.slips++,
+      later: (t) => {
+        if (epoch !== this.epoch) return;
+        this.chores.add({ chore: true, task: t, region: this, id: t.id, x: t.x, y: t.y, running: false });
+      },
     };
     task.state = 'build';
     this.ready.delete(task);
@@ -139,6 +151,36 @@ export class Region {
     }
   }
 
+  async runChore(chore, agent) {
+    const epoch = this.epoch;
+    chore.running = true;
+    try {
+      await moveBack(agent, chore.task, () => epoch === this.epoch && this.chores.has(chore), () => this.opts.speed);
+    } catch (err) {
+      console.error('swarm-web: could not move a piece back, putting it in place', err);
+    } finally {
+      agent.release();
+      if (epoch === this.epoch) this.dropChore(chore);
+    }
+  }
+
+  dropChore(chore) {
+    clearShift(chore.task);
+    this.chores.delete(chore);
+    this.checkDone();
+  }
+
+  // Forget every pending move and put those pieces where they belong.
+  clearChores() {
+    this.chores.clear();
+    for (const task of this.tasks) clearShift(task);
+  }
+
+  checkDone() {
+    if (this.done === this.tasks.length && !this.chores.size) this.finishUp();
+    else this.scheduler.kick();
+  }
+
   complete(task) {
     if (task.state === 'done') return;
     settle(task);
@@ -149,8 +191,7 @@ export class Region {
     for (const child of task.children) if (child.state === 'wait') this.ready.add(child);
     this.done++;
     this.emit('progress', this);
-    if (this.done === this.tasks.length) this.finishUp();
-    else this.scheduler.kick();
+    this.checkDone();
   }
 
   // Show `target` and everything it sits inside, right now. Used when keyboard focus
@@ -189,6 +230,7 @@ export class Region {
       changed = true;
     }
     for (const task of this.tasks) task.left = 0;
+    this.clearChores();
     this.ready.clear();
     if (changed) this.emit('progress', this);
     this.finishUp();
@@ -204,6 +246,7 @@ export class Region {
       task.inView = false;
       hide(task);
     }
+    this.clearChores();
     this.done = 0;
     this.slips = 0;
     this.started = false;
@@ -224,6 +267,7 @@ export class Region {
     for (const task of this.tasks) {
       settle(task);
     }
+    this.clearChores();
     if (this.io) this.io.disconnect();
     this.io = null;
     this.ready.clear();

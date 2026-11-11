@@ -13,9 +13,16 @@
 //              then the copy's own text is typed in.
 //
 // With the `mistakes` option above zero, a share of tasks are built with a slip that
-// the agent then corrects: a box drawn too big or in the wrong spot, a line drawn
-// too long, a copy dropped off target, text typed and partly deleted again. Slips
-// only ever affect the drawing; the real element is shown once it is right.
+// the agent then corrects. Most are caught while drawing: a box drawn too big or in
+// the wrong spot, a line drawn too long, a copy dropped off target, text typed and
+// partly deleted again. Those only affect the drawing; the real element is shown
+// once the drawing is right.
+//
+// One is caught late: the piece is built a little out of place, real element and
+// all, and moved once it is finished. A container stays out of place until
+// everything inside it is built, then the whole thing is picked up and put right.
+// The offset is a running animation of the CSS `translate` property, so it changes
+// no styles and no layout, and cancelling it puts the element back exactly.
 //
 // Every step is cancellable: `ctx.live()` turns false when the task was finished some
 // other way (keyboard focus, finish(), replay(), destroy()), and `task.cleanup`
@@ -94,14 +101,105 @@ function addCleanup(task, fn) {
 
 /** Build `task` with `agent`. */
 export async function perform(agent, task, ctx) {
-  if (task.kind === 'text') return typeText(agent, task, ctx);
-  if (task.copyOf) {
-    const copied = await duplicate(agent, task, ctx);
-    if (copied !== null) return copied && { also: carried(task) };
+  const late = displace(task, ctx);
+  if (late && task.leaf) addCleanup(task, () => clearShift(task));
+  const result = await build(agent, task, ctx);
+  if (!late) return result;
+  if (!task.leaf) {
+    // a container is put right later, once its contents are in
+    if (task.shift) ctx.later(task);
+    return result;
   }
+  const moved = result && (await moveBack(agent, task, ctx.live, ctx.speed));
+  clearShift(task);
+  return moved && result;
+}
+
+// ------------------------------------------------------- built out of place
+
+const LATE_SHARE = 0.4; // of all slips, how many are the built-out-of-place kind
+
+export function clearShift(task) {
+  if (!task.shift) return;
+  task.shift.anim.cancel();
+  task.shift = null;
+}
+
+// Maybe start building this task a little out of place. True if it was shifted.
+function displace(task, ctx) {
+  if (Math.random() >= ctx.mistakes() * LATE_SHARE) return false;
+  const { el } = task;
+  if (typeof el.animate !== 'function' || !(window.CSS && CSS.supports && CSS.supports('translate', '1px 1px'))) return false;
+  if (getComputedStyle(el).display === 'inline') return false; // inline boxes can't be translated
+  for (let t = task.parent; t; t = t.parent) if (t.shift) return false; // one at a time per branch
+
+  const r = el.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth;
+  if (r.width * r.height > vw * window.innerHeight * 0.5) return false; // too big to shove around
+  // never push anything past the edge of the page: that would add a scrollbar
+  const fits = (dx) => r.left + dx >= 4 && r.right + dx <= vw - 4;
+  let ox = sign() * rand(10, 30);
+  if (!fits(ox)) ox = fits(-ox) ? -ox : 0;
+  const oy = sign() * rand(8, 24);
+  const at = `${ox}px ${oy}px`;
+  task.shift = { ox, oy, anim: el.animate({ translate: [at, at] }, { duration: 1000, fill: 'both' }) };
+  ctx.slipped();
+  return true;
+}
+
+/**
+ * Select a piece that was built out of place and drag it to where it belongs.
+ * Resolves false if called off. The caller clears the shift afterwards.
+ */
+export async function moveBack(agent, task, live, speed) {
+  const { el } = task;
+  const crew = agent.crew;
+  const ctx = { live, speed };
+  const centre = () => {
+    const r = pageRect(el);
+    return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  };
+  if (!(await agent.travel(centre, ctx))) return false;
+
+  const selection = crew.addRect(agent.color, { handles: true });
+  const follow = () => {
+    const r = pageRect(el);
+    selection.set(r.x, r.y, r.w, r.h);
+    const c = centre();
+    agent.place(...intoView(c.x, c.y));
+  };
+  try {
+    if (!(await crew.tween(200 / speed(), follow, live))) return false;
+    const ms = 320 / speed();
+    const { ox, oy, anim } = task.shift;
+    anim.cancel();
+    task.shift.anim = el.animate({ translate: [`${ox}px ${oy}px`, '0px 0px'] }, { duration: ms, easing: 'ease-in-out', fill: 'both' });
+    if (!(await crew.tween(ms, follow, live))) return false;
+    return await crew.tween(140 / speed(), (t) => {
+      follow();
+      selection.opacity(1 - t);
+    }, live);
+  } finally {
+    selection.remove();
+  }
+}
+
+function build(agent, task, ctx) {
+  if (task.kind === 'text') return typeText(agent, task, ctx);
+  if (task.copyOf) return copyOrDraw(agent, task, ctx);
+  return draw(agent, task, ctx);
+}
+
+function draw(agent, task, ctx) {
   if (task.kind === 'line') return drawLines(agent, task, ctx);
   if (task.kind === 'media' && task.role === 'image') return drawMedia(agent, task, ctx);
   return drawBox(agent, task, ctx);
+}
+
+async function copyOrDraw(agent, task, ctx) {
+  const copied = await duplicate(agent, task, ctx);
+  if (copied !== null) return copied && { also: carried(task) };
+  return draw(agent, task, ctx);
 }
 
 // ------------------------------------------------------------------- boxes
@@ -112,7 +210,7 @@ async function dragOut(agent, task, ctx, look) {
   const { el } = task;
   const crew = agent.crew;
   const start = pageRect(el);
-  const slip = rectSlip(ctx, start);
+  const slip = task.shift ? null : rectSlip(ctx, start); // one slip per piece is plenty
   const size = (g) => `${Math.round(g.w)} × ${Math.round(g.h)}`;
   if (!(await agent.travel(() => off(pageRect(el), slip, 1), ctx))) return null;
 
@@ -342,7 +440,7 @@ async function duplicate(agent, task, ctx, beforeShow) {
   const s0 = pageRect(source.el);
   const d0 = pageRect(el);
   // a slip here is a copy dropped slightly off target, then nudged into place
-  const slip = rectSlip(ctx, d0, false);
+  const slip = task.shift ? null : rectSlip(ctx, d0, false);
   const put = (g) => {
     select();
     ghost.set(g.x, g.y, g.w, g.h);
@@ -449,6 +547,8 @@ async function typeText(agent, task, ctx) {
   } else {
     typed = await run(0, typer.count, typer.count * perChar);
   }
-  if (task.cleanup) task.cleanup();
+  frame.remove();
+  caret.remove();
+  typer.release();
   return typed;
 }

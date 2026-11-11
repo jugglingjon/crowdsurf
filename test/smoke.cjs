@@ -252,12 +252,43 @@ async function cleanShot(page, file) {
   await page.evaluate(() => document.querySelector('#features').scrollIntoView({ behavior: 'instant' }));
   await page.waitForTimeout(1500);
   await page.screenshot({ path: path.join(OUT, 'mistakes-mid-build.png') });
+  // watch for pieces built out of place, and make sure they never widen the page
+  await page.evaluate(() => {
+    window.late = { leaves: 0, containers: 0, withContent: 0, overflow: 0 };
+    const seen = new Set();
+    setInterval(() => {
+      const root = document.documentElement;
+      window.late.overflow = Math.max(window.late.overflow, root.scrollWidth - root.clientWidth);
+      for (const r of window.demoSwarm.regions) {
+        for (const t of r.tasks) {
+          if (!t.shift) continue;
+          if (!seen.has(t)) {
+            seen.add(t);
+            window.late[t.leaf ? 'leaves' : 'containers']++;
+          }
+          // still out of place although it and everything inside it is built
+          if (!t.leaf && t.left === 0 && !seen.has(t.el)) {
+            seen.add(t.el);
+            window.late.withContent++;
+          }
+        }
+      }
+    }, 30);
+  });
   // slowly, so pieces are built on screen and not finished outright by being scrolled past
   await scrollThrough(page, 150, 1500);
   await waitComplete(page, 60000);
   const slipCount = await page.evaluate(() => window.demoSwarm.regions.reduce((n, r) => n + r.slips, 0));
   check('mistakes: at 100% most pieces slip', slipCount > 50, `(${slipCount} slips over ${(await progress(page)).total} tasks)`);
   check('mistakes: nothing left behind', (await residue(page)) === 0 && (await layer(page)).hiddenText === 0);
+  const late = await page.evaluate(() => window.late);
+  check('late slip: pieces are built out of place', late.leaves > 3 && late.containers > 1, JSON.stringify(late));
+  check('late slip: a container is moved only after its contents are built', late.withContent > 0);
+  check('late slip: never widens the page', late.overflow <= 0, `(overflow ${late.overflow}px)`);
+  const leftover = await page.evaluate(() =>
+    window.demoSwarm.regions.reduce((n, r) => n + r.tasks.filter((t) => t.shift || t.el.getAnimations().length).length + r.chores.size, 0),
+  );
+  check('late slip: no offsets or animations left on any element', leftover === 0, `(${leftover})`);
   check('mistakes: finished page is still pixel-identical to the plain page', baseline.equals(await cleanShot(page, 'mistakes-final.png')));
   await page.evaluate(() => window.demoSwarm.set({ mistakes: 0.5 }));
   check('mistakes: can be changed while running', (await page.evaluate(() => window.demoSwarm.regions[0].opts.mistakes)) === 0.5);

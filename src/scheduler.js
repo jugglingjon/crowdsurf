@@ -73,10 +73,12 @@ export class Scheduler {
     if (!queue.length) return;
     queue.sort(order);
     const limit = Math.min(maxAgents, Math.max(agents, Math.ceil(queue.length / 3)));
-    for (const task of queue) {
-      const agent = this.crew.hire(task, limit, task.region.opts);
+    for (const item of queue) {
+      const agent = this.crew.hire(item, limit, item.region.opts);
       if (!agent) break;
-      task.region.build(task, agent).then(() => this.kick());
+      // either a task to build, or a finished piece to move back into place
+      const work = item.chore ? item.region.runChore(item, agent) : item.region.build(item, agent);
+      work.then(() => this.kick());
     }
   }
 }
