@@ -37,6 +37,7 @@ const s = swarm('#features', {
   agents: 5,                      // agents working at once
   maxAgents: 12,                  // ceiling when a backlog builds up (fast scrolling)
   speed: 1,                       // build speed multiplier
+  mistakes: 0,                    // share of pieces (0 to 1) built imperfectly, then corrected
   rootMargin: '0px',              // when an element counts as on screen
   ignore: '[data-swarm-ignore]',  // elements the swarm leaves alone
   names: ['Ada', 'Grace'],        // cursor names (defaults to a built-in list)
@@ -45,8 +46,21 @@ const s = swarm('#features', {
 });
 ```
 
-`data-swarm-speed`, `data-swarm-agents` and `data-swarm-max-agents` on a target override these for
-that region.
+`data-swarm-speed`, `data-swarm-agents`, `data-swarm-max-agents` and `data-swarm-mistakes` on a
+target override these for that region.
+
+### Imperfect placement
+
+Set `mistakes` above zero and that share of pieces is built with a slip the agent then corrects:
+
+- a box or image placeholder drawn too big and resized, or drawn in the wrong spot and moved
+- a line drawn too long and pulled back
+- a duplicate dropped off target and nudged into place
+- text typed part of the way, a few characters deleted, then typed to the end
+
+`mistakes: 0.25` means roughly one piece in four. Slips only affect the drawing: the real element
+is shown once the drawing is right, and deleted text is the real text hidden again, so no wrong
+characters ever appear in the page.
 
 ### Methods and events
 

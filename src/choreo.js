@@ -12,6 +12,11 @@
 //              scratch: a finished one is selected and a copy dragged into place,
 //              then the copy's own text is typed in.
 //
+// With the `mistakes` option above zero, a share of tasks are built with a slip that
+// the agent then corrects: a box drawn too big or in the wrong spot, a line drawn
+// too long, a copy dropped off target, text typed and partly deleted again. Slips
+// only ever affect the drawing; the real element is shown once it is right.
+//
 // Every step is cancellable: `ctx.live()` turns false when the task was finished some
 // other way (keyboard focus, finish(), replay(), destroy()), and `task.cleanup`
 // removes whatever is on screen for it.
@@ -29,6 +34,35 @@ const lerp = (a, b, t) => a + (b - a) * t;
 
 const SETTLE_MS = 170; // release: the real element fades in, the drawing fades out
 const ICON_SIZE = 64; // media no larger than this comes along with a duplicated parent
+
+const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+const sign = () => (Math.random() < 0.5 ? -1 : 1);
+
+// Roll for a slip on this step, and count it if it happens.
+function slips(ctx) {
+  if (Math.random() >= ctx.mistakes()) return false;
+  ctx.slipped();
+  return true;
+}
+
+// Hold still for a moment (the "hm, that's not right" beat).
+function pause(agent, ctx, ms) {
+  return agent.crew.tween(ms / ctx.speed(), () => {}, ctx.live);
+}
+
+// How a rectangle is off: nudged out of place, or too big. Null for no slip.
+function rectSlip(ctx, r, canResize = true) {
+  if (!slips(ctx)) return null;
+  if (canResize && Math.random() < 0.5) {
+    return { ox: 0, oy: 0, ew: Math.min(r.w * rand(0.08, 0.28), 70), eh: Math.min(r.h * rand(0.08, 0.3), 70) };
+  }
+  return { ox: sign() * rand(8, 28), oy: sign() * rand(6, 22), ew: 0, eh: 0 };
+}
+
+// The rectangle with `k` (1 -> 0) of the slip still applied.
+function off(r, slip, k) {
+  return slip ? { x: r.x + slip.ox * k, y: r.y + slip.oy * k, w: r.w + slip.ew * k, h: r.h + slip.eh * k } : r;
+}
 
 function pageRect(el) {
   const r = el.getBoundingClientRect();
@@ -77,25 +111,58 @@ export async function perform(agent, task, ctx) {
 async function dragOut(agent, task, ctx, look) {
   const { el } = task;
   const crew = agent.crew;
-  if (!(await agent.travel(() => pageRect(el), ctx))) return null;
+  const start = pageRect(el);
+  const slip = rectSlip(ctx, start);
+  const size = (g) => `${Math.round(g.w)} × ${Math.round(g.h)}`;
+  if (!(await agent.travel(() => off(pageRect(el), slip, 1), ctx))) return null;
 
   agent.setShape('cross');
   const outline = crew.addRect(agent.color, { fill: true, badge: true, ...look });
   addCleanup(task, () => outline.remove());
 
-  const start = pageRect(el);
-  const ok = await crew.tween(
+  let ok = await crew.tween(
     clamp(Math.hypot(start.w, start.h) * 0.45, 220, 620) / ctx.speed(),
     (t) => {
       const e = easeOut(t);
-      const r = pageRect(el);
-      const w = r.w * e;
-      const h = r.h * e;
-      outline.set(r.x, r.y, w, h, `${Math.round(w)} × ${Math.round(h)}`);
-      agent.place(...intoView(r.x + w, r.y + h));
+      const g = off(pageRect(el), slip, 1);
+      const w = g.w * e;
+      const h = g.h * e;
+      outline.set(g.x, g.y, w, h, `${Math.round(w)} × ${Math.round(h)}`);
+      agent.place(...intoView(g.x + w, g.y + h));
     },
     ctx.live,
   );
+
+  if (ok && slip) {
+    const hold = () => {
+      const g = off(pageRect(el), slip, 1);
+      outline.set(g.x, g.y, g.w, g.h, size(g));
+    };
+    const moved = slip.ox || slip.oy;
+    // wrong spot: pick it up by the middle. Too big: pull the corner back in.
+    const grip = (g) => (moved ? { x: g.x + g.w / 2, y: g.y + g.h / 2 } : { x: g.x + g.w, y: g.y + g.h });
+    ok = await crew.tween(260 / ctx.speed(), hold, ctx.live);
+    if (ok && moved) {
+      ok = await agent.travel(() => {
+        hold();
+        return grip(off(pageRect(el), slip, 1));
+      }, ctx);
+    }
+    if (ok) {
+      ok = await crew.tween(
+        300 / ctx.speed(),
+        (t) => {
+          const g = off(pageRect(el), slip, 1 - easeInOut(t));
+          outline.set(g.x, g.y, g.w, g.h, size(g));
+          const p = grip(g);
+          agent.place(...intoView(p.x, p.y));
+        },
+        ctx.live,
+      );
+    }
+    if (ok) ok = await pause(agent, ctx, 90);
+  }
+
   agent.setShape('arrow');
   return ok ? outline : null;
 }
@@ -190,18 +257,23 @@ async function drawLines(agent, task, ctx, beforeShow) {
     paths.push(path);
     path.track = () => path.set(segment(el, side));
     const [a, b] = segment(el, side);
-    const ok = await crew.tween(
-      clamp(Math.hypot(b.x - a.x, b.y - a.y) * 0.5, 180, 520) / ctx.speed(),
-      (t) => {
-        const [from, to] = segment(el, side);
-        const e = easeInOut(t);
-        const tip = { x: lerp(from.x, to.x, e), y: lerp(from.y, to.y, e) };
-        path.set([from, tip]);
-        for (const done of paths) if (done !== path) done.track();
-        agent.place(...intoView(tip.x, tip.y));
-      },
-      ctx.live,
-    );
+    const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    // a slip here is a line drawn too long, then pulled back
+    const extra = slips(ctx) ? Math.min(length * rand(0.06, 0.18), 60) : 0;
+    // the end point, `e` of the way along, with `k` (1 -> 0) of the overshoot applied
+    const draw = (e, k) => {
+      const [from, to] = segment(el, side);
+      const reach = e * (1 + (extra * k) / length);
+      const tip = { x: lerp(from.x, to.x, reach), y: lerp(from.y, to.y, reach) };
+      path.set([from, tip]);
+      for (const done of paths) if (done !== path) done.track();
+      agent.place(...intoView(tip.x, tip.y));
+    };
+    let ok = await crew.tween(clamp(length * 0.5, 180, 520) / ctx.speed(), (t) => draw(easeInOut(t), 1), ctx.live);
+    if (ok && extra) {
+      ok = await crew.tween(220 / ctx.speed(), () => draw(1, 1), ctx.live);
+      if (ok) ok = await crew.tween(240 / ctx.speed(), (t) => draw(1, 1 - easeInOut(t)), ctx.live);
+    }
     if (!ok) return false;
   }
   agent.setShape('arrow');
@@ -269,19 +341,27 @@ async function duplicate(agent, task, ctx, beforeShow) {
   addCleanup(task, () => ghost.remove());
   const s0 = pageRect(source.el);
   const d0 = pageRect(el);
-  const moved = await crew.tween(
+  // a slip here is a copy dropped slightly off target, then nudged into place
+  const slip = rectSlip(ctx, d0, false);
+  const put = (g) => {
+    select();
+    ghost.set(g.x, g.y, g.w, g.h);
+    agent.place(...intoView(g.x + g.w / 2, g.y + g.h / 2));
+  };
+  let moved = await crew.tween(
     clamp(Math.hypot(d0.x - s0.x, d0.y - s0.y) * 0.6, 260, 640) / ctx.speed(),
     (t) => {
       const e = easeInOut(t);
       const s = pageRect(source.el);
-      const d = pageRect(el);
-      const g = { x: lerp(s.x, d.x, e), y: lerp(s.y, d.y, e), w: lerp(s.w, d.w, e), h: lerp(s.h, d.h, e) };
-      select();
-      ghost.set(g.x, g.y, g.w, g.h);
-      agent.place(...intoView(g.x + g.w / 2, g.y + g.h / 2));
+      const d = off(pageRect(el), slip, 1);
+      put({ x: lerp(s.x, d.x, e), y: lerp(s.y, d.y, e), w: lerp(s.w, d.w, e), h: lerp(s.h, d.h, e) });
     },
     ctx.live,
   );
+  if (moved && slip) {
+    moved = await crew.tween(240 / ctx.speed(), () => put(off(pageRect(el), slip, 1)), ctx.live);
+    if (moved) moved = await crew.tween(260 / ctx.speed(), (t) => put(off(pageRect(el), slip, 1 - easeInOut(t))), ctx.live);
+  }
   agent.setShape('arrow');
   if (!moved) return false;
 
@@ -335,21 +415,40 @@ async function typeText(agent, task, ctx) {
 
   // text inside a duplicate is a quick edit, not a fresh paragraph
   const pace = task.quick ? 10 : 16;
-  const typed = await crew.tween(
-    clamp(typer.count * pace, task.quick ? 180 : 260, task.quick ? 900 : 1500) / ctx.speed(),
-    (t) => {
-      const n = Math.round(t * typer.count);
-      typer.reveal(n);
-      const r = pageRect(el);
-      frame.set(r.x - 3, r.y - 2, r.w + 6, r.h + 4);
-      const c = typer.caret(n);
-      if (c) {
-        caret.set(c.x, c.y, c.h);
-        agent.place(c.x + 10, c.y + c.h * 0.62);
-      }
-    },
-    ctx.live,
-  );
+  const perChar = clamp(typer.count * pace, task.quick ? 180 : 260, task.quick ? 900 : 1500) / typer.count;
+
+  // Move the caret from character `from` to `to` (forwards types, backwards deletes).
+  const run = (from, to, ms) =>
+    crew.tween(
+      ms / ctx.speed(),
+      (t) => {
+        const n = Math.round(lerp(from, to, t));
+        typer.reveal(n);
+        const r = pageRect(el);
+        frame.set(r.x - 3, r.y - 2, r.w + 6, r.h + 4);
+        const c = typer.caret(n);
+        if (c) {
+          caret.set(c.x, c.y, c.h);
+          agent.place(c.x + 10, c.y + c.h * 0.62);
+        }
+      },
+      ctx.live,
+    );
+
+  let typed;
+  if (typer.count >= 8 && slips(ctx)) {
+    // type part of it, think better of the last few characters, delete them, carry on
+    const stop = Math.round(typer.count * rand(0.35, 0.9));
+    const back = stop - Math.min(stop - 1, Math.round(rand(3, 9)));
+    typed =
+      (await run(0, stop, stop * perChar)) &&
+      (await pause(agent, ctx, 240)) &&
+      (await run(stop, back, (stop - back) * 34)) &&
+      (await pause(agent, ctx, 140)) &&
+      (await run(back, typer.count, (typer.count - back) * perChar));
+  } else {
+    typed = await run(0, typer.count, typer.count * perChar);
+  }
   if (task.cleanup) task.cleanup();
   return typed;
 }

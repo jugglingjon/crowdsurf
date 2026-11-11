@@ -54,10 +54,11 @@ export function createTyper(el) {
 
   const range = doc.createRange();
   const probe = doc.createRange();
-  let cursor = 0; // segment index; typing only moves forward
+  let cursor = 0; // segment index the caret was last in
   let lastCaret = null;
 
   function locate(index) {
+    while (cursor > 0 && index < segs[cursor].start) cursor--; // deleting goes backwards
     while (cursor < segs.length - 1 && index >= segs[cursor].start + segs[cursor].len) cursor++;
     const seg = segs[cursor];
     return [seg.node, Math.min(seg.len, Math.max(0, index - seg.start))];

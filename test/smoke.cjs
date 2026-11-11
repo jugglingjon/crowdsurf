@@ -92,7 +92,8 @@ async function cleanShot(page, file) {
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(`${query}: ${e.message}`));
     page.on('console', (m) => m.type() === 'error' && errors.push(`${query}: ${m.text()}`));
-    await page.goto(base + query);
+    // the demo turns imperfect placement on by default; tests opt in explicitly
+    await page.goto(base + query + (query.includes('mistakes=') ? '' : '&mistakes=0'));
     await page.waitForLoadState('load');
     return page;
   };
@@ -237,6 +238,29 @@ async function cleanShot(page, file) {
   p = await progress(page);
   check('reduced motion: no cursor layer', !(await layer(page)).mounted);
   check('reduced motion: nothing is hidden or planned', p.total === 0 && (await opacityOf(page, '#pricing h2')) === '1' && (await visibilityOf(page, '#features .card')) === 'visible');
+  await page.context().close();
+
+  // ------------------------------------------------- imperfect placement
+  page = await open('?mode=regions');
+  await scrollThrough(page, 500, 150);
+  await waitComplete(page);
+  const noSlips = await page.evaluate(() => window.demoSwarm.regions.reduce((n, r) => n + r.slips, 0));
+  check('mistakes: off means no slips at all', noSlips === 0, `(${noSlips})`);
+  await page.context().close();
+
+  page = await open('?mode=regions&mistakes=1');
+  await page.evaluate(() => document.querySelector('#features').scrollIntoView({ behavior: 'instant' }));
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: path.join(OUT, 'mistakes-mid-build.png') });
+  // slowly, so pieces are built on screen and not finished outright by being scrolled past
+  await scrollThrough(page, 150, 1500);
+  await waitComplete(page, 60000);
+  const slipCount = await page.evaluate(() => window.demoSwarm.regions.reduce((n, r) => n + r.slips, 0));
+  check('mistakes: at 100% most pieces slip', slipCount > 50, `(${slipCount} slips over ${(await progress(page)).total} tasks)`);
+  check('mistakes: nothing left behind', (await residue(page)) === 0 && (await layer(page)).hiddenText === 0);
+  check('mistakes: finished page is still pixel-identical to the plain page', baseline.equals(await cleanShot(page, 'mistakes-final.png')));
+  await page.evaluate(() => window.demoSwarm.set({ mistakes: 0.5 }));
+  check('mistakes: can be changed while running', (await page.evaluate(() => window.demoSwarm.regions[0].opts.mistakes)) === 0.5);
   await page.context().close();
 
   // -------------------------------------------------------------- mobile

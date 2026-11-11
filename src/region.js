@@ -30,6 +30,7 @@ export class Region {
     this.ready = new Set(); // waiting tasks whose parent is built
     this.done = 0;
     this.building = 0;
+    this.slips = 0; // deliberate mistakes played so far (see the `mistakes` option)
     this.epoch = 0; // bumped to abandon builds that are mid-flight
     this.started = false;
     this.completed = false;
@@ -111,6 +112,8 @@ export class Region {
     const ctx = {
       live: () => epoch === this.epoch && task.state === 'build',
       speed: () => this.opts.speed,
+      mistakes: () => Math.min(1, Math.max(0, Number(this.opts.mistakes) || 0)),
+      slipped: () => this.slips++,
     };
     task.state = 'build';
     this.ready.delete(task);
@@ -202,6 +205,7 @@ export class Region {
       hide(task);
     }
     this.done = 0;
+    this.slips = 0;
     this.started = false;
     this.completed = false;
     this.el.removeEventListener('focusin', this.onFocus);

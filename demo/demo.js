@@ -4,8 +4,14 @@ const mode = document.documentElement.getAttribute('data-mode');
 const $ = (id) => document.getElementById(id);
 
 if (mode !== 'off') {
+  // Imperfect placement: on at 30% here so it can be seen. ?mistakes=0 to 1 sets it from the URL.
+  const param = parseFloat(new URLSearchParams(location.search).get('mistakes'));
+  let often = param > 0 ? Math.min(1, param) : 0.3;
+  let imperfect = !(param === 0);
+  const options = { mistakes: imperfect ? often : 0 };
+
   // respectReducedMotion is left on: with "reduce motion" set in your OS, nothing builds.
-  const instance = mode === 'page' ? swarm(document.body) : swarm('[data-swarm]');
+  const instance = mode === 'page' ? swarm(document.body, options) : swarm('[data-swarm]', options);
   window.demoSwarm = instance; // handy in the console
 
   // ------------------------------------------------------------ live stats
@@ -29,6 +35,9 @@ if (mode !== 'off') {
     }
     $('kinds').textContent = `${kinds.box} box · ${kinds.text} text · ${kinds.media} media · ${kinds.line} line`;
     $('copies').textContent = `${copies} of these are duplicates`;
+    let slipCount = 0;
+    for (const region of instance.regions) slipCount += region.slips;
+    $('slips').textContent = imperfect ? `${slipCount} slip${slipCount === 1 ? '' : 's'}` : '';
   }
 
   instance.on('progress', render).on('start', render).on('complete', render);
@@ -44,6 +53,27 @@ if (mode !== 'off') {
     instance.set({ speed: speeds[speedIx] });
     $('speed').textContent = speeds[speedIx] + '×';
   });
+
+  // -------------------------------------------------- imperfect placement
+
+  function syncImperfect() {
+    $('imperfect').checked = imperfect;
+    $('howoften').value = String(Math.round(often * 100));
+    $('howoften').disabled = !imperfect;
+    $('howoften-out').textContent = Math.round(often * 100) + '%';
+    $('howoften-row').classList.toggle('is-off', !imperfect);
+    instance.set({ mistakes: imperfect ? often : 0 });
+    render();
+  }
+  $('imperfect').addEventListener('change', (e) => {
+    imperfect = e.target.checked;
+    syncImperfect();
+  });
+  $('howoften').addEventListener('input', (e) => {
+    often = Number(e.target.value) / 100;
+    syncImperfect();
+  });
+  syncImperfect();
 
   // ---------------------------------------------------------- plan overlay
   // Outlines every planned task, so the planner's decisions can be checked by eye.

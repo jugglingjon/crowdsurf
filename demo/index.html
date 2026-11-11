@@ -263,6 +263,15 @@
     <button type="button" id="speed" title="Build speed">1×</button>
     <button type="button" id="planbtn" aria-pressed="false" title="Outline every planned task">Show plan</button>
   </div>
+  <div class="dock-option">
+    <label><input type="checkbox" id="imperfect"> Imperfect placement</label>
+    <span id="slips"></span>
+  </div>
+  <div class="dock-option" id="howoften-row">
+    <label for="howoften">How often</label>
+    <input type="range" id="howoften" min="5" max="100" step="5" value="30">
+    <output id="howoften-out" for="howoften">30%</output>
+  </div>
   <div class="legend" id="legend" hidden>
     <span><i class="k-box"></i>box</span>
     <span><i class="k-text"></i>text</span>

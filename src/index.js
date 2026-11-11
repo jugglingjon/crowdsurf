@@ -12,6 +12,7 @@ export const DEFAULTS = {
   agents: 5, // agents working at once in calm conditions
   maxAgents: 12, // ceiling when a backlog builds up (fast scrolling)
   speed: 1, // build speed multiplier
+  mistakes: 0, // share of pieces (0 to 1) built with a slip that is then corrected; 0 turns it off
   rootMargin: '0px', // IntersectionObserver margin: when an element counts as on screen
   ignore: '[data-swarm-ignore]', // elements (and their contents) the swarm leaves alone
   names: null, // cursor names, e.g. ['Ada', 'Grace']; defaults to a built-in list
@@ -33,7 +34,7 @@ function resolve(target) {
 
 function dataOptions(el) {
   const out = {};
-  for (const key of ['speed', 'agents', 'maxAgents']) {
+  for (const key of ['speed', 'agents', 'maxAgents', 'mistakes']) {
     const attr = 'data-swarm-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
     const n = parseFloat(el.getAttribute(attr));
     if (n > 0) out[key] = n;
