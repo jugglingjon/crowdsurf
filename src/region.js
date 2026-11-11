@@ -63,6 +63,12 @@ export class Region {
     if (this.io) this.io.disconnect();
     this.ready.clear();
     this.io = new IntersectionObserver((entries) => this.observe(entries), { rootMargin: this.opts.rootMargin });
+    // children come after parents in `tasks`, so walking backwards totals each subtree
+    for (let i = this.tasks.length - 1; i >= 0; i--) {
+      const task = this.tasks[i];
+      task.left = task.state === 'done' ? 0 : 1;
+      for (const child of task.children) task.left += child.left;
+    }
     for (const task of this.tasks) {
       if (task.state === 'done') continue;
       if (!task.parent || task.parent.state === 'done') this.ready.add(task);
@@ -90,7 +96,10 @@ export class Region {
     // completing a task adds its children to `ready`; a Set visits those too
     for (const task of this.ready) {
       if (task.state !== 'wait') continue;
-      if (task.inView) queue.push(task);
+      if (task.inView) {
+        // a copy waits until the one it is copied from is completely built
+        if (!task.copyOf || task.copyOf.left === 0) queue.push(task);
+      }
       // Scrolled past without being seen (anchor jumps, flings): no need to animate.
       // The observer only reports changes, so this has to be measured.
       else if (task.el.getBoundingClientRect().bottom <= 0) this.complete(task);
@@ -110,15 +119,20 @@ export class Region {
       this.started = true;
       this.emit('start', this);
     }
+    let result = null;
     try {
-      await perform(agent, task, ctx);
+      result = await perform(agent, task, ctx);
     } catch (err) {
       console.error('swarm-web: a build step failed, showing the element as is', err);
     } finally {
       this.building--;
       agent.release();
       // also reached when a step failed: the element must never stay hidden
-      if (ctx.live()) this.complete(task);
+      if (ctx.live()) {
+        this.complete(task);
+        // things that were built along with it (the insides of a duplicated card)
+        if (result && result.also) for (const extra of result.also) this.complete(extra);
+      }
     }
   }
 
@@ -126,6 +140,7 @@ export class Region {
     if (task.state === 'done') return;
     settle(task);
     task.state = 'done';
+    for (let t = task; t; t = t.parent) t.left--;
     this.ready.delete(task);
     if (this.io) this.io.unobserve(task.el);
     for (const child of task.children) if (child.state === 'wait') this.ready.add(child);
@@ -166,9 +181,11 @@ export class Region {
       if (task.state === 'done') continue;
       settle(task);
       task.state = 'done';
+      task.left = 0;
       this.done++;
       changed = true;
     }
+    for (const task of this.tasks) task.left = 0;
     this.ready.clear();
     if (changed) this.emit('progress', this);
     this.finishUp();

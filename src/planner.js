@@ -1,26 +1,33 @@
 // Planner: walks a target element and decides which elements the swarm will build.
 //
 // Nothing is cloned. Every task points at a real element, which is hidden until its
-// turn and then revealed in place. There are three kinds of task:
+// turn and then revealed in place. There are four kinds of task:
 //
-//   box    a container with something of its own to show (background, border, shadow,
-//          a decorative pseudo-element or loose text). Its children wait for it.
+//   box    a container with something of its own to show (background, full border,
+//          shadow, a decorative pseudo-element or loose text). Its children wait for it.
+//   line   an <hr>, or a container whose only decoration is a border on one or two
+//          sides. Drawn with the pen. A container's children wait for it.
 //   text   a block whose content is all inline: a heading, paragraph, link, button.
-//   media  an atomic element: image, svg, video, canvas, iframe, form control, <hr>,
-//          or a web component with a shadow root.
+//   media  an atomic element: image, svg, video, canvas, iframe (role "image"), or a
+//          form control (role "control"). A web component with a shadow root counts
+//          as an image.
 //
 // Plain wrappers with nothing visible of their own get no task. Their children attach
-// to the nearest box above them.
+// to the nearest container task above them.
+//
+// Repeated siblings (cards, list rows, nav links) are grouped: the first is built in
+// full, the rest are marked as copies of it and get duplicated instead.
 
 const SKIP = new Set([
   'script', 'style', 'link', 'meta', 'title', 'head', 'template', 'noscript', 'br', 'wbr',
   'source', 'track', 'param', 'base', 'datalist', 'option', 'optgroup', 'area', 'map',
 ]);
 
-const ATOMIC = new Set([
-  'img', 'picture', 'svg', 'video', 'audio', 'canvas', 'iframe', 'embed', 'object',
-  'input', 'select', 'textarea', 'hr', 'progress', 'meter', 'math',
-]);
+const IMAGES = new Set(['img', 'picture', 'svg', 'video', 'canvas', 'iframe', 'embed', 'object', 'math']);
+const CONTROLS = new Set(['input', 'select', 'textarea', 'progress', 'meter', 'audio', 'hr']);
+
+// An <hr> no taller than this is a line; a taller one is drawn as a box.
+const RULE_MAX = 6;
 
 // Smaller than this in either direction is treated as invisible (this also leaves
 // screen-reader-only text alone, so it is never hidden from assistive tech).
@@ -33,24 +40,84 @@ function paints(color) {
   return !!color && color !== 'transparent' && !CLEAR_LEGACY.test(color) && !CLEAR_MODERN.test(color);
 }
 
-function hasBorder(s) {
+function borderSides(s) {
+  const sides = [];
   for (const side of ['Top', 'Right', 'Bottom', 'Left']) {
     const style = s[`border${side}Style`];
     if (style !== 'none' && style !== 'hidden' && parseFloat(s[`border${side}Width`]) > 0 && paints(s[`border${side}Color`])) {
-      return true;
+      sides.push(side.toLowerCase());
     }
   }
-  return false;
+  return sides;
 }
 
-function decorated(s) {
+function filled(s) {
   return (
     paints(s.backgroundColor) ||
     s.backgroundImage !== 'none' ||
     s.boxShadow !== 'none' ||
-    (s.backdropFilter && s.backdropFilter !== 'none') ||
-    hasBorder(s)
+    !!(s.backdropFilter && s.backdropFilter !== 'none')
   );
+}
+
+function decorated(s) {
+  return filled(s) || borderSides(s).length > 0;
+}
+
+// What an element draws of its own: { box: true }, { sides: [...] } for a border on
+// one or two sides only, or null for nothing.
+function shapeOf(s) {
+  const sides = borderSides(s);
+  if (filled(s) || sides.length > 2) return { box: true };
+  if (sides.length) return { sides };
+  return null;
+}
+
+// Two tasks look like copies of one another: same element, same classes, same
+// make-up inside.
+function signature(task) {
+  return `${task.kind}:${task.el.localName}.${task.el.className}(${task.children.map(signature).join(',')})`;
+}
+
+const SIZE_SLOP = 2;
+
+function sameSize(a, b) {
+  return Math.abs(a.w - b.w) <= SIZE_SLOP || Math.abs(a.h - b.h) <= SIZE_SLOP;
+}
+
+// Mark repeated siblings: the first of each set stays as it is, the others become
+// copies of it.
+function groupCopies(tasks) {
+  const bySlot = new Map(); // parent element -> signature -> tasks
+  for (const task of tasks) {
+    if (task.kind === 'media' || !task.el.parentElement) continue;
+    let sigs = bySlot.get(task.el.parentElement);
+    if (!sigs) bySlot.set(task.el.parentElement, (sigs = new Map()));
+    const sig = signature(task);
+    if (!sigs.has(sig)) sigs.set(sig, []);
+    sigs.get(sig).push(task);
+  }
+  for (const sigs of bySlot.values()) {
+    for (const set of sigs.values()) {
+      const master = set[0];
+      const group = set.filter((t) => sameSize(t, master));
+      if (group.length < 2) continue;
+      for (const task of group) {
+        task.group = group;
+        if (task !== master) task.copyOf = master;
+      }
+    }
+  }
+  // text anywhere inside a copy is typed as a quick edit
+  for (const task of tasks) {
+    if (task.kind !== 'text') continue;
+    for (let t = task; t; t = t.parent) {
+      if (t.copyOf) {
+        task.quick = true;
+        break;
+      }
+    }
+  }
 }
 
 function hasDirectText(el) {
@@ -131,11 +198,22 @@ export function plan(root, { ignore = '[data-swarm-ignore]' } = {}) {
       parent,
       children: [],
       depth: parent ? parent.depth + 1 : 0,
+      // leaves are hidden with opacity, containers with visibility (see reveal.js)
+      leaf: kind === 'text' || kind === 'media',
       state: 'wait',
       inView: false,
       x: 0,
       y: 0,
+      w: 0,
+      h: 0,
+      left: 0, // unbuilt tasks in this subtree, itself included (kept by the region)
       chars: 0,
+      role: null, // media: 'image' | 'control'
+      sides: null, // which borders to pen, or ['rule'] for an <hr>
+      decorated: false, // text sitting in a box of its own
+      group: null, // repeated siblings this task belongs to
+      copyOf: null, // the first of that group, when this is not it
+      quick: false,
       ...extra,
     };
     if (parent) parent.children.push(task);
@@ -158,26 +236,38 @@ export function plan(root, { ignore = '[data-swarm-ignore]' } = {}) {
       const r = el.getBoundingClientRect();
       const sized = r.width >= MIN_SIZE && r.height >= MIN_SIZE;
 
-      if (ATOMIC.has(name) || el.shadowRoot) {
-        // an image that has not loaded yet has no size, but will
-        const loading = name === 'img' && !el.complete;
-        if (sized || loading) add('media', el, parent);
+      const size = { w: r.width, h: r.height };
+
+      if (name === 'hr' && r.width >= MIN_SIZE && r.height <= RULE_MAX) {
+        add('line', el, parent, { ...size, leaf: true, sides: ['rule'] });
         return;
       }
+
+      if (IMAGES.has(name) || CONTROLS.has(name) || el.shadowRoot) {
+        // an image that has not loaded yet has no size, but will
+        const loading = name === 'img' && !el.complete;
+        if (sized || loading) add('media', el, parent, { ...size, role: CONTROLS.has(name) ? 'control' : 'image' });
+        return;
+      }
+
+      const shape = shapeOf(s);
 
       if (isTextBlock(el)) {
         if (sized) {
           add('text', el, parent, {
+            ...size,
             chars: el.textContent.trim().replace(/\s+/g, ' ').length,
-            // text in a shape of its own (button, badge): the shape is drawn first
-            decorated: decorated(s),
+            // text in a shape of its own (button, badge, bordered cell): that is made first
+            decorated: !!(shape && shape.box),
+            sides: shape && shape.sides ? shape.sides : null,
           });
         }
         return;
       }
 
-      if (sized && (decorated(s) || hasDirectText(el) || paintedPseudo(el))) {
-        parent = add('box', el, parent);
+      if (sized) {
+        if (shape && shape.sides) parent = add('line', el, parent, { ...size, sides: shape.sides });
+        else if (shape || hasDirectText(el) || paintedPseudo(el)) parent = add('box', el, parent, size);
       }
     }
 
@@ -192,5 +282,6 @@ export function plan(root, { ignore = '[data-swarm-ignore]' } = {}) {
     walk(root, null);
   }
 
+  groupCopies(tasks);
   return tasks;
 }

@@ -60,6 +60,9 @@ const layer = (page) =>
     return {
       agents: host ? host.shadowRoot.querySelectorAll('.agent').length : 0,
       outlines: host ? host.shadowRoot.querySelectorAll('.rect').length : 0,
+      pens: host ? host.shadowRoot.querySelectorAll('.path').length : 0,
+      placeholders: host ? host.shadowRoot.querySelectorAll('.rect.media').length : 0,
+      selections: host ? host.shadowRoot.querySelectorAll('.rect i').length / 4 : 0,
       carets: host ? host.shadowRoot.querySelectorAll('.caret').length : 0,
       hiddenText: hl ? hl.size : 0,
       mounted: !!host,
@@ -109,11 +112,25 @@ async function cleanShot(page, file) {
   let p = await progress(page);
   check('regions: tasks were planned and none built yet', p.total > 80 && p.done === 0, `(${p.done}/${p.total})`);
   const kinds = await page.evaluate(() => {
-    const k = { box: 0, text: 0, media: 0 };
-    for (const r of window.demoSwarm.regions) for (const t of r.tasks) k[t.kind]++;
+    const k = { box: 0, text: 0, media: 0, line: 0, copies: 0, images: 0, penned: 0 };
+    for (const r of window.demoSwarm.regions) {
+      for (const t of r.tasks) {
+        k[t.kind]++;
+        if (t.copyOf) k.copies++;
+        if (t.role === 'image') k.images++;
+        if (t.sides) k.penned++;
+      }
+    }
     return k;
   });
-  check('regions: all three kinds found', kinds.box > 10 && kinds.text > 40 && kinds.media >= 9, JSON.stringify(kinds));
+  check('regions: every kind found', kinds.box > 10 && kinds.text > 40 && kinds.media >= 9 && kinds.line >= 5, JSON.stringify(kinds));
+  check('planner: repeated siblings are marked as copies', kinds.copies >= 20);
+  check('planner: images and bordered cells are told apart', kinds.images === 7 && kinds.penned > 10);
+  const cards = await page.evaluate(() => {
+    const tasks = window.demoSwarm.regions[0].tasks.filter((t) => t.el.classList.contains('card'));
+    return { n: tasks.length, masters: tasks.filter((t) => !t.copyOf).length, quick: tasks[1].children.filter((c) => c.kind === 'text').every((c) => c.quick) };
+  });
+  check('planner: one card is the original, five are copies', cards.n === 6 && cards.masters === 1 && cards.quick);
 
   // children never appear before their parent
   await page.evaluate(() => {
@@ -127,21 +144,31 @@ async function cleanShot(page, file) {
   await page.screenshot({ path: path.join(OUT, 'regions-mid-build.png') });
   p = await progress(page);
   check('regions: building has started but not finished', p.done < p.total, `(${p.done}/${p.total})`);
-  // sample the cursor layer for a second: agents, a dragged outline and typed text should all turn up
-  const seen = { agents: 0, outlines: 0, carets: 0, hiddenText: 0 };
-  for (let i = 0; i < 25; i++) {
+  // sample the cursor layer while the first region builds: every kind of drawing should turn up
+  const seen = { agents: 0, outlines: 0, carets: 0, hiddenText: 0, pens: 0, placeholders: 0, selections: 0 };
+  // a copy is never animated before the one it is copied from is completely built
+  // (content scrolled past unseen is finished outright, which is fine)
+  await page.evaluate(() => {
+    window.copyViolations = 0;
+    window.demoSwarm.on('progress', ({ region }) => {
+      for (const t of region.tasks) if (t.copyOf && t.state === 'build' && t.copyOf.left > 0) window.copyViolations++;
+    });
+  });
+  for (let i = 0; i < 110; i++) {
     const l = await layer(page);
     for (const k in seen) seen[k] = Math.max(seen[k], l[k]);
+    if (i === 20) await page.screenshot({ path: path.join(OUT, 'regions-cursors.png') });
     await page.waitForTimeout(40);
   }
+  check('cursors: a line is penned, an image placeholder drawn, a sibling duplicated', seen.pens > 0 && seen.placeholders > 0 && seen.selections > 0);
   check('cursors: agents are on screen while building', seen.agents >= 3 && seen.agents <= 12, JSON.stringify(seen));
   check('cursors: outlines are dragged and text is typed', seen.outlines > 0 && seen.carets > 0 && seen.hiddenText > 0);
-  await page.screenshot({ path: path.join(OUT, 'regions-cursors.png') });
   await scrollThrough(page);
   await waitComplete(page);
   p = await progress(page);
   check('regions: everything built after scrolling through', p.done === p.total && p.complete, `(${p.done}/${p.total})`);
   check('regions: parents always built before children', (await page.evaluate(() => window.orderViolations)) === 0);
+  check('duplicates: copies wait for the original to be finished', (await page.evaluate(() => window.copyViolations)) === 0);
   check('regions: no inline styles left behind', (await residue(page)) === 0);
   check('cursors: no text is left hidden mid-typing', (await layer(page)).hiddenText === 0);
   check('regions: finished page is pixel-identical to the plain page', baseline.equals(await cleanShot(page, 'regions-final.png')));

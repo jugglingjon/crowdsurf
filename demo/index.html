@@ -33,12 +33,12 @@
 
 <main>
   <section class="hero">
-    <p class="eyebrow">Phase 2 preview</p>
+    <p class="eyebrow">Phase 3 preview</p>
     <h1>A page that gets built while you scroll it.</h1>
     <p class="lede">
       Elements wait hidden until they scroll into view. Then a small crew of cursors builds them: boxes and
-      images are dragged out with a live size readout, and text is typed into place. Everything you end up with
-      is the page's own markup.
+      images are dragged out with a live size readout, lines are drawn with the pen, repeated pieces are
+      duplicated, and text is typed into place. Everything you end up with is the page's own markup.
     </p>
     <div class="modes" role="group" aria-label="Demo mode">
       <a class="mode" data-for="regions" href="?mode=regions">
@@ -61,8 +61,9 @@
     <div class="section-head">
       <p class="eyebrow">Region one</p>
       <h2>Cards in a grid</h2>
-      <p>Each card is a box. Its icon, heading and copy wait for the box, then build inside it.</p>
+      <p>The first card is built piece by piece. The other five are duplicated from a finished one, then their own text is typed in.</p>
     </div>
+    <hr class="rule">
     <div class="cards">
       <article class="card">
         <svg class="icon" viewBox="0 0 32 32" aria-hidden="true"><rect x="4" y="4" width="24" height="24" rx="6"/></svg>
@@ -127,7 +128,7 @@
       <div class="band-copy">
         <p class="eyebrow">Region two</p>
         <h2>Media, stats and a dark band</h2>
-        <p>The band is one large box. Images and inline SVG count as media and build as a single piece.</p>
+        <p>The band is one large box. The image gets a placeholder first, then sweeps in from the top.</p>
         <ul class="ticks">
           <li>Images wait even if they have not loaded yet</li>
           <li>List items are separate pieces of text</li>
@@ -153,7 +154,7 @@
     <div class="section-head">
       <p class="eyebrow">Region three, at 1.5× speed</p>
       <h2>Pricing cards, a table and a form</h2>
-      <p>Buttons, table cells and form controls are all picked up as their own tasks.</p>
+      <p>Buttons and form controls are drawn as shapes. The table's row lines are drawn with the pen.</p>
     </div>
     <div class="plans">
       <article class="plan">
@@ -172,7 +173,7 @@
         <p class="price"><span class="amount">$12</span> <span class="per">per month</span></p>
         <ul>
           <li>Unlimited regions</li>
-          <li>Lines and duplicates</li>
+          <li>Guides and sound</li>
           <li>Sound design</li>
         </ul>
         <button class="btn btn-solid" type="button">Choose Studio</button>
@@ -197,15 +198,15 @@
         </thead>
         <tbody>
           <tr><td>1</td><td>Planner, scheduler, scroll-triggered regions</td><td><span class="pill">Done</span></td></tr>
-          <tr><td>2</td><td>Cursor layer, box drawing and typing</td><td><span class="pill pill-on">This demo</span></td></tr>
-          <tr><td>3</td><td>Media, lines and duplicated siblings</td><td><span class="pill">Next</span></td></tr>
-          <tr><td>4</td><td>Once-only option, teardown, polish</td><td><span class="pill">Planned</span></td></tr>
+          <tr><td>2</td><td>Cursor layer, box drawing and typing</td><td><span class="pill">Done</span></td></tr>
+          <tr><td>3</td><td>Media, lines and duplicated siblings</td><td><span class="pill pill-on">This demo</span></td></tr>
+          <tr><td>4</td><td>Once-only option, teardown, polish</td><td><span class="pill">Next</span></td></tr>
         </tbody>
       </table>
     </div>
 
     <form class="signup" action="#" onsubmit="return false">
-      <label for="email">Get notified when phase 3 lands</label>
+      <label for="email">Get notified when phase 4 lands</label>
       <div class="signup-row">
         <input id="email" type="email" placeholder="you@example.com" autocomplete="off">
         <select aria-label="How often">
@@ -253,8 +254,9 @@
   <div class="meter"><div class="meter-fill" id="meter"></div></div>
   <div class="dock-row dock-small">
     <span id="agents">0 agents working</span>
-    <span id="kinds"></span>
   </div>
+  <div class="dock-row dock-small"><span id="kinds"></span></div>
+  <div class="dock-row dock-small"><span id="copies"></span></div>
   <div class="dock-buttons">
     <button type="button" id="replay">Replay</button>
     <button type="button" id="finish">Finish</button>
@@ -265,6 +267,7 @@
     <span><i class="k-box"></i>box</span>
     <span><i class="k-text"></i>text</span>
     <span><i class="k-media"></i>media</span>
+    <span><i class="k-line"></i>line</span>
   </div>
 </aside>
 

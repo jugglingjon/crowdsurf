@@ -108,6 +108,7 @@ html[data-mode="off"] .mode[data-for="off"] { border-color: var(--accent); box-s
 
 .plain { border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
 
+.rule { border: 0; border-top: 1px solid var(--line); margin: 0 0 28px; }
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .card {
   padding: 24px;
@@ -229,6 +230,7 @@ html[data-mode="off"] .dock { display: none; }
 .dock-small { white-space: nowrap; margin-top: 8px; font-size: 12px; color: #9aa0ab; font-variant-numeric: tabular-nums; }
 .meter { margin-top: 10px; height: 6px; border-radius: 3px; background: #343842; overflow: hidden; }
 .meter-fill { height: 100%; width: 0; background: #8f7bff; transition: width 0.18s linear; }
+.legend { flex-wrap: wrap; }
 .dock-buttons { display: grid; grid-template-columns: repeat(4, auto); gap: 6px; margin-top: 12px; }
 .dock-buttons button {
   font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 8px;
@@ -243,12 +245,14 @@ html[data-mode="off"] .dock { display: none; }
 .k-box { color: #3b82f6; }
 .k-text { color: #10b981; }
 .k-media { color: #f59e0b; }
+.k-line { color: #ec4899; }
 
 /* plan overlay: one outline per planned task */
 .plan-overlay { position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: 40; pointer-events: none; }
 .plan-overlay i { position: absolute; border: 1.5px solid; border-radius: 3px; }
 .plan-overlay .k-box { border-style: dashed; }
 .plan-overlay .is-done { opacity: 0.35; }
+.plan-overlay .is-copy { border-style: dotted; border-width: 2.5px; }
 
 /* ------------------------------------------------------------ responsive */
 

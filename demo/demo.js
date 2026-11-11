@@ -19,9 +19,16 @@ if (mode !== 'off') {
     $('meter').style.width = total ? `${(done / total) * 100}%` : '0';
     const n = activeAgents();
     $('agents').textContent = `${n} agent${n === 1 ? '' : 's'} working`;
-    const kinds = { box: 0, text: 0, media: 0 };
-    for (const region of instance.regions) for (const task of region.tasks) kinds[task.kind]++;
-    $('kinds').textContent = `${kinds.box} box · ${kinds.text} text · ${kinds.media} media`;
+    const kinds = { box: 0, text: 0, media: 0, line: 0 };
+    let copies = 0;
+    for (const region of instance.regions) {
+      for (const task of region.tasks) {
+        kinds[task.kind]++;
+        if (task.copyOf) copies++;
+      }
+    }
+    $('kinds').textContent = `${kinds.box} box · ${kinds.text} text · ${kinds.media} media · ${kinds.line} line`;
+    $('copies').textContent = `${copies} of these are duplicates`;
   }
 
   instance.on('progress', render).on('start', render).on('complete', render);
@@ -54,7 +61,7 @@ if (mode !== 'off') {
       for (const task of region.tasks) {
         const r = task.el.getBoundingClientRect();
         const box = document.createElement('i');
-        box.className = `k-${task.kind}${task.state === 'done' ? ' is-done' : ''}`;
+        box.className = `k-${task.kind}${task.state === 'done' ? ' is-done' : ''}${task.copyOf ? ' is-copy' : ''}`;
         box.style.cssText = `left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;height:${r.height}px`;
         frag.appendChild(box);
       }

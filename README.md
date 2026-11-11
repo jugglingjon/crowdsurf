@@ -4,9 +4,10 @@ A JavaScript library that builds part or all of a web page in front of the reade
 Point it at a section, or at the whole page, and its elements wait hidden until they scroll into
 view, then get built in order.
 
-**Status: phase 2 of 6.** A crew of named cursors builds the page: boxes and media are dragged out
-with a live size readout, and text is typed into place. Still to come: pen-drawn lines, duplicated
-siblings, guides, sound.
+**Status: phase 3 of 6.** A crew of named cursors builds the page: boxes are dragged out with a
+live size readout, images sweep in over a placeholder, lines are drawn with the pen, repeated
+pieces are duplicated from a finished one, and text is typed into place. Still to come: a
+once-only option and polish, packaged builds, then guides and sound.
 
 **Demo:** https://jugglingjon.github.io/swarm-web/
 
@@ -64,10 +65,12 @@ Regions also dispatch `swarm:start` and `swarm:complete` DOM events.
 
 Nothing is cloned or screenshotted. The swarm hides the page's real elements and reveals them in place.
 
-1. **Plan** ([`src/planner.js`](src/planner.js)). Walk the target and sort elements into three kinds
-   of task: **box** (a container with a background, border or shadow of its own), **text** (a
-   heading, paragraph, link or button) and **media** (image, SVG, video, form control). Plain
-   wrappers get no task.
+1. **Plan** ([`src/planner.js`](src/planner.js)). Walk the target and sort elements into four kinds
+   of task: **box** (a container with a background, full border or shadow of its own), **line** (an
+   `<hr>`, or a border on only one or two sides), **text** (a heading, paragraph, link or button)
+   and **media** (image, SVG, video, form control). Plain wrappers get no task. Repeated siblings
+   with the same tag, classes and make-up (cards, list rows, nav links) are grouped: the first is
+   the original, the rest are copies.
 2. **Hide** ([`src/reveal.js`](src/reveal.js)). Boxes get `visibility: hidden`; text and media get
    `opacity: 0`, so they stay available to screen readers and keyboard focus. Original inline styles
    are restored exactly when an element is built.
@@ -76,8 +79,11 @@ Nothing is cloned or screenshotted. The swarm hides the page's real elements and
    of agents in reading order, each going to the nearest free one. Anything scrolled past unseen is
    finished instantly.
 4. **Build** ([`src/crew.js`](src/crew.js), [`src/choreo.js`](src/choreo.js)). Cursors live in one
-   click-through layer above the page, removed again when the crew leaves. For a box or media
-   element an agent drags out an outline, then the real element fades in under it. For text
+   click-through layer above the page, removed again when the crew leaves. For a box an agent
+   drags out an outline, then the real element fades in under it. An image gets a crossed
+   placeholder, then is uncovered from the top. A line is drawn with the pen, anchor to anchor. A
+   copy waits for its original to be finished, then an agent selects a finished sibling and drags
+   a duplicate into place; the copy's boxes and icons arrive with it and its text is typed in. For text
    ([`src/typing.js`](src/typing.js)) the untyped part is made transparent with a CSS custom
    highlight that shrinks as the caret advances, so no wrapper elements are added and nothing
    reflows.
@@ -97,6 +103,10 @@ npm test
 ```
 
 ## Known limits
+
+- A copy waits for its original to be completely built, so a row of cards fills in one after the
+  first. If part of the original is off screen, its copies wait until that part scrolls into view.
+- A duplicate is shown as a tinted outline while it is dragged, not as a picture of the original.
 
 - Typing needs the CSS Custom Highlight API (current Chrome, Edge, Safari and Firefox). Without it,
   text is drawn as a box and fades in.

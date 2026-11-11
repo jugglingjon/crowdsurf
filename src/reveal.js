@@ -1,10 +1,10 @@
 // Hiding and revealing real elements in place.
 //
 // How elements are hidden matters:
-//   box   -> visibility:hidden. Children can still be shown independently, which a
-//            parent's opacity would not allow.
-//   text, media -> opacity:0 with visibility forced visible, so they stay in the
-//            accessibility tree and keep their place in the tab order while waiting.
+//   containers (box, bordered wrapper) -> visibility:hidden. Children can still be
+//            shown independently, which a parent's opacity would not allow.
+//   leaves (text, media, <hr>) -> opacity:0 with visibility forced visible, so they
+//            stay in the accessibility tree and keep their place in the tab order.
 //
 // Styles are set inline through the CSSOM (works under a strict CSP and inside any
 // stylesheet setup) and put back exactly as they were.
@@ -17,7 +17,7 @@ export function hide(task) {
     task.saved = PROPS.map((p) => [p, style.getPropertyValue(p), style.getPropertyPriority(p)]);
     task.hadStyleAttr = task.el.hasAttribute('style');
   }
-  if (task.kind === 'box') {
+  if (!task.leaf) {
     style.setProperty('visibility', 'hidden', 'important');
   } else {
     style.setProperty('visibility', 'visible', 'important');

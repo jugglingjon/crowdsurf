@@ -21,6 +21,13 @@ const CSS_TEXT = `
 .name { position: absolute; left: 13px; top: 17px; padding: 3px 7px 4px; border-radius: 3px 9px 9px 9px;
   color: #fff; font: 600 11px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; white-space: nowrap; }
 .rect { position: absolute; left: 0; top: 0; box-sizing: border-box; border: 1.5px solid; border-radius: 1px; }
+.rect.media { background-color: #e4e6ea; background-image:
+  linear-gradient(to top right, transparent calc(50% - .6px), #a3a9b4 calc(50% - .6px), #a3a9b4 calc(50% + .6px), transparent calc(50% + .6px)),
+  linear-gradient(to bottom right, transparent calc(50% - .6px), #a3a9b4 calc(50% - .6px), #a3a9b4 calc(50% + .6px), transparent calc(50% + .6px)); }
+.rect i { position: absolute; width: 7px; height: 7px; box-sizing: border-box; background: #fff; border: 1.5px solid; border-color: inherit; }
+.rect i:nth-child(1) { left: -4px; top: -4px; } .rect i:nth-child(2) { right: -4px; top: -4px; }
+.rect i:nth-child(3) { left: -4px; bottom: -4px; } .rect i:nth-child(4) { right: -4px; bottom: -4px; }
+.path { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
 .badge { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 6px); padding: 2px 6px 3px; border-radius: 4px;
   color: #fff; font: 600 11px/1.2 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; white-space: nowrap; }
 .caret { position: absolute; left: 0; top: 0; width: 2px; border-radius: 1px; }
@@ -31,6 +38,10 @@ const SHAPES = {
     `<svg width="20" height="22" viewBox="0 0 20 22" style="left:-2px;top:-1.5px"><path d="M2 1.5v16.2l4.4-4 3 6.8 2.7-1.2-3-6.6h6z" fill="${c}" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
   cross: (c) =>
     `<svg width="22" height="22" viewBox="0 0 22 22" style="left:-11px;top:-11px"><path d="M11 2v18M2 11h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M11 2v18M2 11h18" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  pen: (c) =>
+    `<svg width="22" height="22" viewBox="0 0 22 22" style="left:-2px;top:-20px"><path d="M2 20l2.2-7.6L13.6 3l5.4 5.4-9.4 9.4z" fill="${c}" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><path d="M2 20l5.2-5.2" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/><circle cx="8.6" cy="13.4" r="1.5" fill="#fff"/></svg>`,
+  copy: (c) =>
+    `<svg width="28" height="26" viewBox="0 0 28 26" style="left:-2px;top:-1.5px"><path d="M2 1.5v16.2l4.4-4 3 6.8 2.7-1.2-3-6.6h6z" fill="${c}" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><circle cx="20" cy="18" r="6" fill="${c}" stroke="#fff" stroke-width="1.4"/><path d="M20 15v6M17 18h6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
   text: (c) =>
     `<svg width="12" height="22" viewBox="0 0 12 22" style="left:-6px;top:-11px"><path d="M2 2h2.5Q6 2 6 3.5v15Q6 20 4.5 20H2M10 2H7.5Q6 2 6 3.5M10 20H7.5Q6 20 6 18.5" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M2 2h2.5Q6 2 6 3.5v15Q6 20 4.5 20H2M10 2H7.5Q6 2 6 3.5M10 20H7.5Q6 20 6 18.5" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/></svg>`,
 };
@@ -260,13 +271,15 @@ export class Crew {
     if (this.jobs.size || this.agents.length) this.wake();
   }
 
-  // An outline rectangle in page coordinates, optionally tinted and with a size badge.
-  addRect(color, { fill = false, badge = false } = {}) {
+  // An outline rectangle in page coordinates. Options: a tint, a size badge, the
+  // crossed "image goes here" look, or corner handles as on a selected object.
+  addRect(color, { fill = false, badge = false, media = false, handles = false } = {}) {
     this.mount();
     const el = document.createElement('div');
-    el.className = 'rect';
+    el.className = media ? 'rect media' : 'rect';
     el.style.borderColor = color;
-    if (fill) el.style.background = color + '1f';
+    if (handles) el.innerHTML = '<i></i><i></i><i></i><i></i>';
+    if (fill && !media) el.style.backgroundColor = color + '1f';
     let label = null;
     if (badge) {
       label = document.createElement('span');
@@ -286,8 +299,54 @@ export class Crew {
       opacity(o) {
         el.style.opacity = String(o);
       },
+      // cut away the top `t` (0..1) of the rectangle
+      clip(t) {
+        el.style.clipPath = `inset(${t * 100}% -80px -40px -80px)`;
+      },
       remove() {
         el.remove();
+      },
+    };
+  }
+
+  // A straight stroke through points given in page coordinates, optionally with a
+  // pen-tool anchor at each end.
+  addPath(color, { anchors = false } = {}) {
+    this.mount();
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'path');
+    const line = document.createElementNS(NS, 'polyline');
+    line.setAttribute('fill', 'none');
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', '1.5');
+    svg.appendChild(line);
+    const dots = [];
+    this.root.appendChild(svg);
+    return {
+      set(points) {
+        const v = viewport();
+        line.setAttribute('points', points.map((p) => `${p.x - v.x},${p.y - v.y}`).join(' '));
+        if (!anchors) return;
+        points.forEach((p, i) => {
+          if (!dots[i]) {
+            dots[i] = document.createElementNS(NS, 'rect');
+            dots[i].setAttribute('width', '6');
+            dots[i].setAttribute('height', '6');
+            dots[i].setAttribute('fill', '#fff');
+            dots[i].setAttribute('stroke', color);
+            dots[i].setAttribute('stroke-width', '1.5');
+            svg.appendChild(dots[i]);
+          }
+          dots[i].setAttribute('x', p.x - v.x - 3);
+          dots[i].setAttribute('y', p.y - v.y - 3);
+        });
+      },
+      opacity(o) {
+        svg.style.opacity = String(o);
+      },
+      remove() {
+        svg.remove();
       },
     };
   }
