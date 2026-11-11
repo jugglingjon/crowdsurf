@@ -3,7 +3,7 @@
 
 import { plan } from './planner.js';
 import { hide, show } from './reveal.js';
-import { perform, moveBack, clearShift } from './choreo.js';
+import { perform, moveBack, clearShift, maybeDally } from './choreo.js';
 
 // Stop whatever is happening on screen for a task and leave its element shown.
 function settle(task) {
@@ -32,6 +32,7 @@ export class Region {
     this.building = 0;
     this.slips = 0; // deliberate mistakes played so far (see the `mistakes` option)
     this.chores = new Set(); // containers built out of place, waiting to be moved back
+    this.dallies = 0; // times an agent dawdled between jobs (see the `dillyDally` option)
     this.epoch = 0; // bumped to abandon builds that are mid-flight
     this.started = false;
     this.completed = false;
@@ -120,6 +121,7 @@ export class Region {
     const ctx = {
       live: () => epoch === this.epoch && task.state === 'build',
       speed: () => this.opts.speed,
+      natural: () => !!this.opts.naturalMovement,
       mistakes: () => Math.min(1, Math.max(0, Number(this.opts.mistakes) || 0)),
       slipped: () => this.slips++,
       later: (t) => {
@@ -141,7 +143,7 @@ export class Region {
       console.error('swarm-web: a build step failed, showing the element as is', err);
     } finally {
       this.building--;
-      agent.release();
+      if (!maybeDally(agent, this)) agent.release();
       // also reached when a step failed: the element must never stay hidden
       if (ctx.live()) {
         this.complete(task);
@@ -155,11 +157,15 @@ export class Region {
     const epoch = this.epoch;
     chore.running = true;
     try {
-      await moveBack(agent, chore.task, () => epoch === this.epoch && this.chores.has(chore), () => this.opts.speed);
+      await moveBack(agent, chore.task, {
+        live: () => epoch === this.epoch && this.chores.has(chore),
+        speed: () => this.opts.speed,
+        natural: () => !!this.opts.naturalMovement,
+      });
     } catch (err) {
       console.error('swarm-web: could not move a piece back, putting it in place', err);
     } finally {
-      agent.release();
+      if (!maybeDally(agent, this)) agent.release();
       if (epoch === this.epoch) this.dropChore(chore);
     }
   }
@@ -249,6 +255,7 @@ export class Region {
     this.clearChores();
     this.done = 0;
     this.slips = 0;
+    this.dallies = 0;
     this.started = false;
     this.completed = false;
     this.el.removeEventListener('focusin', this.onFocus);

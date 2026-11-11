@@ -59,7 +59,7 @@ class Agent {
     this.name = name;
     this.color = color;
     this.pos = { x: 0, y: 0 }; // page coordinates
-    this.state = 'idle'; // idle | working | leaving
+    this.state = 'idle'; // idle | working | dallying | leaving
     this.idleSince = 0;
     this.shape = '';
     this.el = document.createElement('div');
@@ -109,6 +109,7 @@ class Agent {
     this.el.style.opacity = '1';
     const from = { ...this.pos };
     const dist = Math.hypot(to.x - from.x, to.y - from.y);
+    if (ctx.natural && ctx.natural()) return this.glide(getTarget, ctx, from, dist);
     const bend = (Math.random() - 0.5) * dist * 0.2;
     return this.crew.tween(
       clamp(dist * 0.7, 140, 480) / ctx.speed(),
@@ -125,11 +126,52 @@ class Agent {
     );
   }
 
-  release() {
-    if (this.state !== 'working') return;
+  // The way a hand moves a mouse: a curved sweep (now and then an S), quick off the
+  // mark and slow on the approach, sometimes running a little past the target and
+  // coming back, and never taking exactly the same time twice.
+  glide(getTarget, ctx, from, dist) {
+    const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+    const bow1 = (Math.random() < 0.5 ? -1 : 1) * dist * rand(0.14, 0.34);
+    const bow2 = (Math.random() < 0.25 ? -1 : 1) * bow1 * rand(0.25, 0.75);
+    const over = dist > 120 && Math.random() < 0.4 ? rand(5, 14) : 0;
+    return this.crew.tween(
+      clamp(dist * 0.95 * rand(0.85, 1.25), 190, 700) / ctx.speed(),
+      (t) => {
+        const to = getTarget();
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        // minimum-jerk timing, skewed towards an early start
+        const u = Math.pow(t, 0.82);
+        const e = u * u * u * (10 - 15 * u + 6 * u * u);
+        const m = 1 - e;
+        // cubic Bezier from `from` to `to`, control points bowed out to the side
+        const a = 3 * m * m * e;
+        const b = 3 * m * e * e;
+        const c = e * e * e;
+        let x = m * m * m * from.x + a * (from.x + dx * 0.3 + nx * bow1) + b * (from.x + dx * 0.72 + nx * bow2) + c * to.x;
+        let y = m * m * m * from.y + a * (from.y + dy * 0.3 + ny * bow1) + b * (from.y + dy * 0.72 + ny * bow2) + c * to.y;
+        // run past the target, then settle back onto it
+        const bump = t > 0.55 ? Math.sin((Math.PI * (t - 0.55)) / 0.45) : 0;
+        x += (dx / len) * over * bump;
+        y += (dy / len) * over * bump;
+        this.place(x, y);
+      },
+      ctx.live,
+    );
+  }
+
+  // done with a job (or with dallying): wait around for the next one
+  idle() {
     this.state = 'idle';
     this.idleSince = performance.now();
     this.setShape('arrow');
+  }
+
+  release() {
+    if (this.state === 'working') this.idle();
   }
 
   leave() {
@@ -197,21 +239,27 @@ export class Crew {
   }
 
   // An agent for a task at page position (x, y): the nearest idle one, or a new one
-  // while the crew is under `limit`. Returns null when everyone is busy.
+  // while the crew is under `limit`, or failing that one that is only dallying (it
+  // drops what it was doing). Returns null when everyone is busy.
   hire(point, limit, opts) {
     let best = null;
     let bestDist = Infinity;
+    let dallier = null;
+    let dallierDist = Infinity;
     let active = 0;
     for (const a of this.agents) {
       if (a.state === 'leaving') continue;
       active++;
-      if (a.state !== 'idle') continue;
       const d = Math.hypot(a.pos.x - point.x, a.pos.y - point.y);
-      if (d < bestDist) {
+      if (a.state === 'idle' && d < bestDist) {
         best = a;
         bestDist = d;
+      } else if (a.state === 'dallying' && d < dallierDist) {
+        dallier = a;
+        dallierDist = d;
       }
     }
+    if (!best && active >= limit) best = dallier;
     if (!best) {
       if (active >= limit) return null;
       this.mount();

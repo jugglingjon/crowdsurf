@@ -38,6 +38,8 @@ const s = swarm('#features', {
   maxAgents: 12,                  // ceiling when a backlog builds up (fast scrolling)
   speed: 1,                       // build speed multiplier
   mistakes: 0,                    // share of pieces (0 to 1) built imperfectly, then corrected
+  naturalMovement: false,         // hand-like curved cursor paths
+  dillyDally: false,              // cursors sometimes loiter or read between jobs
   rootMargin: '0px',              // when an element counts as on screen
   ignore: '[data-swarm-ignore]',  // elements the swarm leaves alone
   names: ['Ada', 'Grace'],        // cursor names (defaults to a built-in list)
@@ -46,8 +48,22 @@ const s = swarm('#features', {
 });
 ```
 
-`data-swarm-speed`, `data-swarm-agents`, `data-swarm-max-agents` and `data-swarm-mistakes` on a
-target override these for that region.
+`data-swarm-speed`, `data-swarm-agents`, `data-swarm-max-agents`, `data-swarm-mistakes`,
+`data-swarm-natural-movement` and `data-swarm-dilly-dally` on a target override these for that
+region.
+
+### Natural cursor movement
+
+With `naturalMovement: true` cursors stop travelling in near-straight lines. Each trip is a curved
+sweep (occasionally an S), quick off the mark and slow on the approach, and now and then runs a few
+pixels past its target before settling back. Trip times vary, so no two cursors move in step.
+
+### Dilly-dallying
+
+With `dillyDally: true` a cursor that has just finished a job sometimes (about three times in ten)
+takes a moment before the next. It either drifts a short way off and waits, or finds a line of
+finished text nearby and runs along underneath it as if reading. A dallying cursor is called
+straight back to work when every other cursor is busy, so it costs little build time.
 
 ### Imperfect placement
 

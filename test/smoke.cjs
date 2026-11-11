@@ -92,8 +92,9 @@ async function cleanShot(page, file) {
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(`${query}: ${e.message}`));
     page.on('console', (m) => m.type() === 'error' && errors.push(`${query}: ${m.text()}`));
-    // the demo turns imperfect placement on by default; tests opt in explicitly
-    await page.goto(base + query + (query.includes('mistakes=') ? '' : '&mistakes=0'));
+    // the demo turns its extras on by default; tests opt in to each explicitly
+    const defaults = ['mistakes', 'natural', 'dally'].filter((k) => !query.includes(k + '=')).map((k) => `&${k}=0`).join('');
+    await page.goto(base + query + defaults);
     await page.waitForLoadState('load');
     return page;
   };
@@ -292,6 +293,34 @@ async function cleanShot(page, file) {
   check('mistakes: finished page is still pixel-identical to the plain page', baseline.equals(await cleanShot(page, 'mistakes-final.png')));
   await page.evaluate(() => window.demoSwarm.set({ mistakes: 0.5 }));
   check('mistakes: can be changed while running', (await page.evaluate(() => window.demoSwarm.regions[0].opts.mistakes)) === 0.5);
+  await page.context().close();
+
+  // ------------------------------------- natural movement, dilly-dallying
+  page = await open('?mode=regions&natural=1&dally=1');
+  await page.evaluate(() => {
+    window.sawDallying = 0;
+    setInterval(() => {
+      const host = document.querySelector('[data-swarm-layer]');
+      if (host) window.sawDallying = Math.max(window.sawDallying, host.shadowRoot.querySelectorAll('.agent').length);
+    }, 50);
+  });
+  await scrollThrough(page, 200, 700);
+  await waitComplete(page, 60000);
+  const extras = await page.evaluate(() => ({
+    dallies: window.demoSwarm.regions.reduce((n, r) => n + r.dallies, 0),
+    natural: window.demoSwarm.regions.every((r) => r.opts.naturalMovement === true),
+    agents: window.sawDallying,
+  }));
+  check('dilly-dally: cursors dawdle between jobs', extras.dallies > 5, JSON.stringify(extras));
+  check('dilly-dally: never puts more cursors on screen than allowed', extras.agents > 0 && extras.agents <= 12);
+  check('natural movement: on, and the build still completes cleanly', extras.natural && (await residue(page)) === 0);
+  check('extras: finished page is pixel-identical to the plain page', baseline.equals(await cleanShot(page, 'extras-final.png')));
+  await page.context().close();
+
+  page = await open('?mode=regions');
+  await scrollThrough(page, 500, 150);
+  await waitComplete(page);
+  check('dilly-dally: off means no dawdling', (await page.evaluate(() => window.demoSwarm.regions.reduce((n, r) => n + r.dallies, 0))) === 0);
   await page.context().close();
 
   // -------------------------------------------------------------- mobile

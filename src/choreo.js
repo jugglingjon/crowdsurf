@@ -24,6 +24,10 @@
 // The offset is a running animation of the CSS `translate` property, so it changes
 // no styles and no layout, and cancelling it puts the element back exactly.
 //
+// With `dillyDally` on, an agent that has just finished a job sometimes takes a
+// moment before the next: it drifts off and waits, or runs along under a line of
+// finished text as if reading it. It can be called away at any point.
+//
 // Every step is cancellable: `ctx.live()` turns false when the task was finished some
 // other way (keyboard focus, finish(), replay(), destroy()), and `task.cleanup`
 // removes whatever is on screen for it.
@@ -110,7 +114,7 @@ export async function perform(agent, task, ctx) {
     if (task.shift) ctx.later(task);
     return result;
   }
-  const moved = result && (await moveBack(agent, task, ctx.live, ctx.speed));
+  const moved = result && (await moveBack(agent, task, ctx));
   clearShift(task);
   return moved && result;
 }
@@ -151,10 +155,10 @@ function displace(task, ctx) {
  * Select a piece that was built out of place and drag it to where it belongs.
  * Resolves false if called off. The caller clears the shift afterwards.
  */
-export async function moveBack(agent, task, live, speed) {
+export async function moveBack(agent, task, ctx) {
   const { el } = task;
   const crew = agent.crew;
-  const ctx = { live, speed };
+  const { live, speed } = ctx;
   const centre = () => {
     const r = pageRect(el);
     return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
@@ -182,6 +186,76 @@ export async function moveBack(agent, task, live, speed) {
   } finally {
     selection.remove();
   }
+}
+
+// ------------------------------------------------------------ dilly-dallying
+
+const DALLY_CHANCE = 0.3; // after any one job
+
+// A line of finished text near the agent, as { x, y, w } in page coordinates
+// (y is the bottom of the line), or null.
+function lineToRead(agent, region) {
+  let best = null;
+  let bestDist = 700;
+  for (const t of region.tasks) {
+    if (t.kind !== 'text' || t.state !== 'done' || t.w < 90) continue;
+    const d = Math.hypot(t.x - agent.pos.x, t.y - agent.pos.y);
+    if (d < bestDist) {
+      best = t;
+      bestDist = d;
+    }
+  }
+  if (!best || !onScreen(best.el)) return null;
+  const range = document.createRange();
+  range.selectNodeContents(best.el);
+  const lines = [...range.getClientRects()].filter((r) => r.width > 60 && r.top > 0 && r.bottom < window.innerHeight);
+  if (!lines.length) return null;
+  const r = lines[Math.floor(Math.random() * Math.min(lines.length, 3))];
+  return { x: r.left + window.scrollX, y: r.bottom + window.scrollY, w: r.width };
+}
+
+/**
+ * Maybe let `agent` dawdle for a moment now that its job is done. Returns true if
+ * it is dallying (it goes idle by itself afterwards), false if the caller should
+ * release it as usual.
+ */
+export function maybeDally(agent, region) {
+  if (!region.opts.dillyDally || agent.state !== 'working' || Math.random() >= DALLY_CHANCE) return false;
+  const token = (agent.dallyToken = {});
+  agent.state = 'dallying';
+  agent.setShape('arrow');
+  region.dallies++;
+  const ctx = {
+    live: () => agent.state === 'dallying' && agent.dallyToken === token,
+    speed: () => region.opts.speed,
+    natural: () => !!region.opts.naturalMovement,
+  };
+  const crew = agent.crew;
+  (async () => {
+    const line = Math.random() < 0.6 ? lineToRead(agent, region) : null;
+    if (line) {
+      // read: along under the line at an unhurried pace, not always to the end
+      if (!(await agent.travel(() => ({ x: line.x - 2, y: line.y + 5 }), ctx))) return;
+      const far = line.w * rand(0.6, 1);
+      const moved = await crew.tween(
+        clamp(far * rand(3.4, 4.8), 450, 1700) / ctx.speed(),
+        (t) => agent.place(line.x + far * t, line.y + 5 + Math.sin(t * 9) * 1.2),
+        ctx.live,
+      );
+      if (moved) await pause(agent, ctx, rand(120, 380));
+    } else {
+      // loiter: drift a short way off and stay there a moment
+      const angle = rand(0, Math.PI * 2);
+      const reach = rand(50, 150);
+      const [x, y] = intoView(agent.pos.x + Math.cos(angle) * reach, agent.pos.y + Math.sin(angle) * reach);
+      if (await agent.travel(() => ({ x, y }), ctx)) await pause(agent, ctx, rand(450, 1100));
+    }
+  })()
+    .catch(() => {})
+    .then(() => {
+      if (ctx.live()) agent.idle();
+    });
+  return true;
 }
 
 function build(agent, task, ctx) {

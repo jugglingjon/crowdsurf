@@ -8,7 +8,11 @@ if (mode !== 'off') {
   const param = parseFloat(new URLSearchParams(location.search).get('mistakes'));
   let often = param > 0 ? Math.min(1, param) : 0.3;
   let imperfect = !(param === 0);
-  const options = { mistakes: imperfect ? often : 0 };
+  // Natural movement and dilly-dallying: both on here. ?natural=0 and ?dally=0 turn them off.
+  const query = new URLSearchParams(location.search);
+  let natural = query.get('natural') !== '0';
+  let dally = query.get('dally') !== '0';
+  const options = { mistakes: imperfect ? often : 0, naturalMovement: natural, dillyDally: dally };
 
   // respectReducedMotion is left on: with "reduce motion" set in your OS, nothing builds.
   const instance = mode === 'page' ? swarm(document.body, options) : swarm('[data-swarm]', options);
@@ -38,6 +42,9 @@ if (mode !== 'off') {
     let slipCount = 0;
     for (const region of instance.regions) slipCount += region.slips;
     $('slips').textContent = imperfect ? `${slipCount} slip${slipCount === 1 ? '' : 's'}` : '';
+    let dallyCount = 0;
+    for (const region of instance.regions) dallyCount += region.dallies;
+    $('dallies').textContent = dally ? `${dallyCount} so far` : '';
   }
 
   instance.on('progress', render).on('start', render).on('complete', render);
@@ -74,6 +81,19 @@ if (mode !== 'off') {
     syncImperfect();
   });
   syncImperfect();
+
+  if (innerWidth < 860) $('more').open = false; // keep the dock small on phones
+  $('natural').checked = natural;
+  $('dally').checked = dally;
+  $('natural').addEventListener('change', (e) => {
+    natural = e.target.checked;
+    instance.set({ naturalMovement: natural });
+  });
+  $('dally').addEventListener('change', (e) => {
+    dally = e.target.checked;
+    instance.set({ dillyDally: dally });
+    render();
+  });
 
   // ---------------------------------------------------------- plan overlay
   // Outlines every planned task, so the planner's decisions can be checked by eye.
