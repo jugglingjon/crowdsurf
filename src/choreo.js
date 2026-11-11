@@ -18,11 +18,20 @@
 // partly deleted again. Those only affect the drawing; the real element is shown
 // once the drawing is right.
 //
-// One is caught late: the piece is built a little out of place, real element and
-// all, and moved once it is finished. A container stays out of place until
-// everything inside it is built, then the whole thing is picked up and put right.
-// The offset is a running animation of the CSS `translate` property, so it changes
-// no styles and no layout, and cancelling it puts the element back exactly.
+// Two are caught late, after the real element and everything in it is built:
+//
+//   out of place   built a little off, then picked up by the middle and moved. The
+//                  offset is a running animation of the CSS `translate` property.
+//   wrong size     built too wide, too tall or both, so its contents are laid out
+//                  and wrapped for that size, then resized from the corner handle
+//                  while the contents reflow. The size is a running animation of
+//                  width and height, with matching negative margins so that the
+//                  space the piece takes up in the page stays the same and nothing
+//                  around it is pushed about.
+//
+// A container waits in its wrong state until everything inside it is built. Both
+// are animations only: no styles are written, and cancelling them puts the element
+// back exactly.
 //
 // With `dillyDally` on, an agent that has just finished a job sometimes takes a
 // moment before the next: it drifts off and waits, or runs along under a line of
@@ -119,9 +128,10 @@ export async function perform(agent, task, ctx) {
   return moved && result;
 }
 
-// ------------------------------------------------------- built out of place
+// ------------------------------------------- built out of place or wrong size
 
-const LATE_SHARE = 0.4; // of all slips, how many are the built-out-of-place kind
+const LATE_SHARE = 0.4; // of all slips, how many are the caught-late kinds
+const px = (v) => parseFloat(v) || 0;
 
 export function clearShift(task) {
   if (!task.shift) return;
@@ -129,12 +139,15 @@ export function clearShift(task) {
   task.shift = null;
 }
 
-// Maybe start building this task a little out of place. True if it was shifted.
+// Maybe start building this task out of place or at the wrong size. True if so.
+// Either way the state lives in `task.shift`: the running animation, the keyframe
+// that holds the wrong state, and the keyframe for the right one.
 function displace(task, ctx) {
   if (Math.random() >= ctx.mistakes() * LATE_SHARE) return false;
   const { el } = task;
   if (typeof el.animate !== 'function' || !(window.CSS && CSS.supports && CSS.supports('translate', '1px 1px'))) return false;
-  if (getComputedStyle(el).display === 'inline') return false; // inline boxes can't be translated
+  const cs = getComputedStyle(el);
+  if (cs.display === 'inline') return false; // inline boxes can't be moved or sized
   for (let t = task.parent; t; t = t.parent) if (t.shift) return false; // one at a time per branch
 
   const r = el.getBoundingClientRect();
@@ -144,41 +157,73 @@ function displace(task, ctx) {
   const fits = (dx) => r.left + dx >= 4 && r.right + dx <= vw - 4;
   let ox = sign() * rand(10, 30);
   if (!fits(ox)) ox = fits(-ox) ? -ox : 0;
-  const oy = sign() * rand(8, 24);
-  const at = `${ox}px ${oy}px`;
-  task.shift = { ox, oy, anim: el.animate({ translate: [at, at] }, { duration: 1000, fill: 'both' }) };
+  // Wrong size: not for media (it would distort), rules, or table parts (the table
+  // would re-flow around them).
+  const sizable = task.kind !== 'media' && !(task.kind === 'line' && task.leaf) && !cs.display.startsWith('table');
+  let hold = null;
+  let rest = null;
+  if (sizable && Math.random() < 0.5) {
+    let ew = Math.random() < 0.75 ? clamp(r.width * rand(0.12, 0.35), 16, 120) : 0;
+    if (!fits(ew) || r.left < 0) ew = 0;
+    const eh = !ew || Math.random() < 0.45 ? clamp(r.height * rand(0.12, 0.35), 12, 90) : 0;
+    // let the new size take effect whatever the layout around it
+    const free = { maxWidth: 'none', maxHeight: 'none', flexGrow: '0', flexShrink: '0', flexBasis: 'auto' };
+    const sized = (dw, dh) => ({
+      ...free,
+      width: `${px(cs.width) + dw}px`,
+      height: `${px(cs.height) + dh}px`,
+      // give back exactly the extra room, so the neighbours stay where they are
+      marginRight: `${px(cs.marginRight) - dw}px`,
+      marginBottom: `${px(cs.marginBottom) - dh}px`,
+    });
+    hold = sized(ew, eh);
+    rest = sized(0, 0);
+    task.shift = { kind: 'size' };
+  } else {
+    hold = { translate: `${ox}px ${sign() * rand(8, 24)}px` };
+    rest = { translate: '0px 0px' };
+    task.shift = { kind: 'place' };
+  }
+  task.shift.hold = hold;
+  task.shift.rest = rest;
+  task.shift.anim = el.animate([hold, hold], { duration: 1000, fill: 'both' });
   ctx.slipped();
   return true;
 }
 
 /**
- * Select a piece that was built out of place and drag it to where it belongs.
- * Resolves false if called off. The caller clears the shift afterwards.
+ * Select a piece that was built out of place or at the wrong size and put it right:
+ * drag it by the middle, or drag its corner handle. Resolves false if called off.
+ * The caller clears the shift afterwards.
  */
 export async function moveBack(agent, task, ctx) {
   const { el } = task;
   const crew = agent.crew;
   const { live, speed } = ctx;
-  const centre = () => {
+  const resizing = task.shift.kind === 'size';
+  // where the cursor holds the piece: the bottom-right handle, or the middle
+  const grip = () => {
     const r = pageRect(el);
-    return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+    return resizing ? { x: r.x + r.w, y: r.y + r.h } : { x: r.x + r.w / 2, y: r.y + r.h / 2 };
   };
-  if (!(await agent.travel(centre, ctx))) return false;
+  if (!(await agent.travel(grip, ctx))) return false;
 
-  const selection = crew.addRect(agent.color, { handles: true });
+  const selection = crew.addRect(agent.color, { handles: true, badge: resizing });
   const follow = () => {
     const r = pageRect(el);
-    selection.set(r.x, r.y, r.w, r.h);
-    const c = centre();
-    agent.place(...intoView(c.x, c.y));
+    selection.set(r.x, r.y, r.w, r.h, `${Math.round(r.w)} × ${Math.round(r.h)}`);
+    const g = grip();
+    agent.place(...intoView(g.x, g.y));
   };
   try {
-    if (!(await crew.tween(200 / speed(), follow, live))) return false;
-    const ms = 320 / speed();
-    const { ox, oy, anim } = task.shift;
+    if (resizing) agent.setShape('resize');
+    if (!(await crew.tween(220 / speed(), follow, live))) return false;
+    const ms = (resizing ? 460 : 320) / speed();
+    const { hold, rest, anim } = task.shift;
     anim.cancel();
-    task.shift.anim = el.animate({ translate: [`${ox}px ${oy}px`, '0px 0px'] }, { duration: ms, easing: 'ease-in-out', fill: 'both' });
+    task.shift.anim = el.animate([hold, rest], { duration: ms, easing: 'ease-in-out', fill: 'both' });
     if (!(await crew.tween(ms, follow, live))) return false;
+    agent.setShape('arrow');
     return await crew.tween(140 / speed(), (t) => {
       follow();
       selection.opacity(1 - t);
@@ -460,7 +505,7 @@ function sourceFor(task) {
   let best = null;
   let bestDist = Infinity;
   for (const other of task.group) {
-    if (other === task || other.state !== 'done' || other.left > 0 || !onScreen(other.el)) continue;
+    if (other === task || other.state !== 'done' || other.left > 0 || other.shift || !onScreen(other.el)) continue;
     const r = pageRect(other.el);
     const d = Math.hypot(r.x - at.x, r.y - at.y);
     if (d < bestDist) {

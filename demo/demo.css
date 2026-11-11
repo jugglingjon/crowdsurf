@@ -237,7 +237,7 @@ html[data-mode="off"] .dock { display: none; }
 .dock-option input[type="range"] { flex: 1; min-width: 0; accent-color: #8f7bff; }
 .dock-option output, #slips, #dallies { font-size: 12px; color: #9aa0ab; font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
 .dock-option.is-off { opacity: 0.45; }
-.dock-more { margin-top: 12px; border-top: 1px solid #343842; padding: 10px 0 0; border-bottom: 0; }
+.dock .dock-more { margin-top: 12px; border-top: 1px solid #343842; border-bottom: 0; padding: 10px 0 0; }
 .dock-more summary { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #9aa0ab; cursor: pointer; }
 .dock-buttons { display: grid; grid-template-columns: repeat(4, auto); gap: 6px; margin-top: 12px; }
 .dock-buttons button {

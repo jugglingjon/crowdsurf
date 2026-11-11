@@ -75,12 +75,17 @@ Set `mistakes` above zero and that share of pieces is built with a slip the agen
 - text typed part of the way, a few characters deleted, then typed to the end
 - a piece built slightly out of place, content and all, then selected and moved once it is
   finished. A card stays out of place until everything inside it is built
+- a piece built too wide, too tall or both, so that what is inside it is laid out and wrapped for
+  the wrong size. Once it is finished a cursor drags its corner handle to the right size and the
+  contents reflow as it goes
 
 `mistakes: 0.25` means roughly one piece in four. Most slips only affect the drawing: the real
 element is shown once the drawing is right, and deleted text is the real text hidden again, so no
-wrong characters ever appear in the page. The out-of-place slip moves the real element with a
-running animation of the CSS `translate` property, which changes no styles or layout and leaves
-nothing behind. It is skipped for anything it would push past the edge of the page.
+wrong characters ever appear in the page. The last two act on the real element, but only through running
+animations (`translate` for position; `width` and `height` for size, with matching negative margins
+so the piece keeps its footprint and its neighbours stay put). No styles are written and nothing
+is left behind. Both are skipped for anything they would push past the edge of the page, and the
+size slip is skipped for images and table cells.
 
 ### Methods and events
 

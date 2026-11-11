@@ -42,6 +42,8 @@ const SHAPES = {
     `<svg width="22" height="22" viewBox="0 0 22 22" style="left:-2px;top:-20px"><path d="M2 20l2.2-7.6L13.6 3l5.4 5.4-9.4 9.4z" fill="${c}" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><path d="M2 20l5.2-5.2" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/><circle cx="8.6" cy="13.4" r="1.5" fill="#fff"/></svg>`,
   copy: (c) =>
     `<svg width="28" height="26" viewBox="0 0 28 26" style="left:-2px;top:-1.5px"><path d="M2 1.5v16.2l4.4-4 3 6.8 2.7-1.2-3-6.6h6z" fill="${c}" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><circle cx="20" cy="18" r="6" fill="${c}" stroke="#fff" stroke-width="1.4"/><path d="M20 15v6M17 18h6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  resize: (c) =>
+    `<svg width="22" height="22" viewBox="0 0 22 22" style="left:-11px;top:-11px"><path d="M5 5l12 12M5 10V5h5M17 12v5h-5" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 5l12 12M5 10V5h5M17 12v5h-5" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   text: (c) =>
     `<svg width="12" height="22" viewBox="0 0 12 22" style="left:-6px;top:-11px"><path d="M2 2h2.5Q6 2 6 3.5v15Q6 20 4.5 20H2M10 2H7.5Q6 2 6 3.5M10 20H7.5Q6 20 6 18.5" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M2 2h2.5Q6 2 6 3.5v15Q6 20 4.5 20H2M10 2H7.5Q6 2 6 3.5M10 20H7.5Q6 20 6 18.5" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/></svg>`,
 };

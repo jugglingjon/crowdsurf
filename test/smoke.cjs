@@ -255,7 +255,13 @@ async function cleanShot(page, file) {
   await page.screenshot({ path: path.join(OUT, 'mistakes-mid-build.png') });
   // watch for pieces built out of place, and make sure they never widen the page
   await page.evaluate(() => {
-    window.late = { leaves: 0, containers: 0, withContent: 0, overflow: 0 };
+    window.late = { leaves: 0, containers: 0, withContent: 0, overflow: 0, moved: 0, resized: 0, bigger: 0, rewrapped: 0 };
+    window.linesThen = new Map();
+    window.lineCount = (el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return new Set([...range.getClientRects()].filter((r) => r.width > 1).map((r) => Math.round(r.top))).size;
+    };
     const seen = new Set();
     setInterval(() => {
       const root = document.documentElement;
@@ -266,6 +272,19 @@ async function cleanShot(page, file) {
           if (!seen.has(t)) {
             seen.add(t);
             window.late[t.leaf ? 'leaves' : 'containers']++;
+            window.late[t.shift.kind === 'size' ? 'resized' : 'moved']++;
+          }
+          if (t.shift.kind === 'size') {
+            const r = t.el.getBoundingClientRect();
+            const key = 'big:' + t.id;
+            if (!seen.has(key) && (r.width > t.w + 8 || r.height > t.h + 8)) {
+              seen.add(key);
+              window.late.bigger++;
+            }
+            // note how many lines the text in (or of) a wrong-size piece wraps onto for now
+            for (const c of [t, ...t.children]) {
+              if (c.kind === 'text' && !window.linesThen.has(c)) window.linesThen.set(c, window.lineCount(c.el));
+            }
           }
           // still out of place although it and everything inside it is built
           if (!t.leaf && t.left === 0 && !seen.has(t.el)) {
@@ -282,8 +301,16 @@ async function cleanShot(page, file) {
   const slipCount = await page.evaluate(() => window.demoSwarm.regions.reduce((n, r) => n + r.slips, 0));
   check('mistakes: at 100% most pieces slip', slipCount > 50, `(${slipCount} slips over ${(await progress(page)).total} tasks)`);
   check('mistakes: nothing left behind', (await residue(page)) === 0 && (await layer(page)).hiddenText === 0);
+  await page.evaluate(() => {
+    // text that sat on a different number of lines while its piece was the wrong size
+    for (const [task, then] of window.linesThen) if (window.lineCount(task.el) !== then) window.late.rewrapped++;
+    window.late.textChecked = window.linesThen.size;
+  });
   const late = await page.evaluate(() => window.late);
   check('late slip: pieces are built out of place', late.leaves > 3 && late.containers > 1, JSON.stringify(late));
+  check('late slip: both kinds happen, out of place and wrong size', late.moved > 3 && late.resized > 3);
+  // how often text re-wraps depends on which pieces happen to slip, so it is reported, not required
+  check('wrong size: pieces really are built bigger', late.bigger > 3, `(${late.rewrapped} of ${late.textChecked} text pieces re-wrapped)`);
   check('late slip: a container is moved only after its contents are built', late.withContent > 0);
   check('late slip: never widens the page', late.overflow <= 0, `(overflow ${late.overflow}px)`);
   const leftover = await page.evaluate(() =>

@@ -31,7 +31,7 @@ export class Region {
     this.done = 0;
     this.building = 0;
     this.slips = 0; // deliberate mistakes played so far (see the `mistakes` option)
-    this.chores = new Set(); // containers built out of place, waiting to be moved back
+    this.chores = new Set(); // containers built out of place or at the wrong size, waiting to be put right
     this.dallies = 0; // times an agent dawdled between jobs (see the `dillyDally` option)
     this.epoch = 0; // bumped to abandon builds that are mid-flight
     this.started = false;
@@ -101,7 +101,8 @@ export class Region {
       if (task.state !== 'wait') continue;
       if (task.inView) {
         // a copy waits until the one it is copied from is completely built
-        if (!task.copyOf || task.copyOf.left === 0) queue.push(task);
+        // (and, if it was built out of place or the wrong size, put right)
+        if (!task.copyOf || (task.copyOf.left === 0 && !task.copyOf.shift)) queue.push(task);
       }
       // Scrolled past without being seen (anchor jumps, flings): no need to animate.
       // The observer only reports changes, so this has to be measured.
