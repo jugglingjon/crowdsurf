@@ -1,8 +1,11 @@
 // Scheduler: one shared pool of agents for every region on the page.
 //
 // Regions hand over tasks that are ready (parent built, element on screen). The
-// scheduler orders them top to bottom, left to right, and gives them to free agents.
-// When a backlog piles up (fast scrolling) more agents join, up to `maxAgents`.
+// scheduler orders them top to bottom, left to right, and gives each to the nearest
+// free agent. When a backlog piles up (fast scrolling) more agents join, up to
+// `maxAgents`.
+
+import { Crew } from './crew.js';
 
 const ROW = 8; // tasks whose tops are within this many px count as the same row
 
@@ -13,10 +16,15 @@ function order(a, b) {
 export class Scheduler {
   constructor() {
     this.regions = new Set();
-    this.busy = 0;
+    this.crew = new Crew();
     this.queued = false;
     this.listening = false;
     this.onScroll = () => this.kick();
+  }
+
+  // agents working right now
+  get busy() {
+    return this.crew.working;
   }
 
   add(region) {
@@ -64,17 +72,11 @@ export class Scheduler {
     }
     if (!queue.length) return;
     queue.sort(order);
-    const limit = Math.min(maxAgents, Math.max(agents, Math.ceil(queue.length / 4)));
-    for (let i = 0; i < queue.length && this.busy < limit; i++) this.run(queue[i]);
-  }
-
-  async run(task) {
-    this.busy++;
-    try {
-      await task.region.build(task);
-    } finally {
-      this.busy--;
-      this.kick();
+    const limit = Math.min(maxAgents, Math.max(agents, Math.ceil(queue.length / 3)));
+    for (const task of queue) {
+      const agent = this.crew.hire(task, limit, task.region.opts);
+      if (!agent) break;
+      task.region.build(task, agent).then(() => this.kick());
     }
   }
 }

@@ -1,8 +1,5 @@
 // Hiding and revealing real elements in place.
 //
-// Phase 1 uses a plain fade as a stand-in. The cursor choreography (drag a box, type
-// the text) replaces `reveal` later; `hide` and `show` stay as they are.
-//
 // How elements are hidden matters:
 //   box   -> visibility:hidden. Children can still be shown independently, which a
 //            parent's opacity would not allow.
@@ -40,23 +37,12 @@ export function show(task) {
   task.hidden = false;
 }
 
-// Milliseconds an agent spends on a task at 1x speed.
-export function duration(task) {
-  if (task.kind === 'box') return 240;
-  if (task.kind === 'media') return 380;
-  return Math.min(900, Math.max(200, 160 + task.chars * 8));
-}
-
-// Milliseconds an agent takes to get to its next task (stand-in for cursor travel).
-export const TRAVEL = 90;
-
 /**
- * Show the element and fade it in. Returns the running Animation, or null when the
- * browser has no Web Animations support (the element is simply shown).
+ * Fade an already-shown element in from transparent. Returns the running Animation,
+ * or null when the browser has no Web Animations support.
  */
-export function reveal(task, speed = 1) {
-  show(task);
-  if (typeof task.el.animate !== 'function') return null;
+export function fade(el, ms) {
+  if (typeof el.animate !== 'function') return null;
   // The empty end keyframe means "whatever the element's own opacity is".
-  return task.el.animate([{ opacity: 0 }, {}], { duration: duration(task) / speed, easing: 'ease-out' });
+  return el.animate([{ opacity: 0 }, {}], { duration: ms, easing: 'ease-out' });
 }

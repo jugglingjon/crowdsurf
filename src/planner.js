@@ -166,7 +166,13 @@ export function plan(root, { ignore = '[data-swarm-ignore]' } = {}) {
       }
 
       if (isTextBlock(el)) {
-        if (sized) add('text', el, parent, { chars: el.textContent.trim().replace(/\s+/g, ' ').length });
+        if (sized) {
+          add('text', el, parent, {
+            chars: el.textContent.trim().replace(/\s+/g, ' ').length,
+            // text in a shape of its own (button, badge): the shape is drawn first
+            decorated: decorated(s),
+          });
+        }
         return;
       }
 

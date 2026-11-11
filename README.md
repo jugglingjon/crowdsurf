@@ -4,8 +4,9 @@ A JavaScript library that builds part or all of a web page in front of the reade
 Point it at a section, or at the whole page, and its elements wait hidden until they scroll into
 view, then get built in order.
 
-**Status: phase 1 of 6.** The planner and scheduler work. The cursor swarm that does the building
-arrives in phase 2; until then each element fades in.
+**Status: phase 2 of 6.** A crew of named cursors builds the page: boxes and media are dragged out
+with a live size readout, and text is typed into place. Still to come: pen-drawn lines, duplicated
+siblings, guides, sound.
 
 **Demo:** https://jugglingjon.github.io/swarm-web/
 
@@ -32,11 +33,13 @@ For targets that are on screen when the page loads, add [`src/prehide.css`](src/
 
 ```js
 const s = swarm('#features', {
-  agents: 4,                      // agents working at once
+  agents: 5,                      // agents working at once
   maxAgents: 12,                  // ceiling when a backlog builds up (fast scrolling)
   speed: 1,                       // build speed multiplier
   rootMargin: '0px',              // when an element counts as on screen
   ignore: '[data-swarm-ignore]',  // elements the swarm leaves alone
+  names: ['Ada', 'Grace'],        // cursor names (defaults to a built-in list)
+  colors: ['#6247ea', '#d93f4c'], // cursor colors, 6-digit hex (defaults to a built-in palette)
   respectReducedMotion: true,     // do nothing for visitors who prefer reduced motion
 });
 ```
@@ -70,7 +73,14 @@ Nothing is cloned or screenshotted. The swarm hides the page's real elements and
    are restored exactly when an element is built.
 3. **Schedule** ([`src/scheduler.js`](src/scheduler.js), [`src/region.js`](src/region.js)). A task
    is ready once its parent box is built and it is on screen. Ready tasks are handed to a shared pool
-   of agents in reading order. Anything scrolled past unseen is finished instantly.
+   of agents in reading order, each going to the nearest free one. Anything scrolled past unseen is
+   finished instantly.
+4. **Build** ([`src/crew.js`](src/crew.js), [`src/choreo.js`](src/choreo.js)). Cursors live in one
+   click-through layer above the page, removed again when the crew leaves. For a box or media
+   element an agent drags out an outline, then the real element fades in under it. For text
+   ([`src/typing.js`](src/typing.js)) the untyped part is made transparent with a CSS custom
+   highlight that shrinks as the caret advances, so no wrapper elements are added and nothing
+   reflows.
 
 ## Develop
 
@@ -86,7 +96,12 @@ Browser checks (needs Playwright with Chromium):
 npm test
 ```
 
-## Known limits in phase 1
+## Known limits
+
+- Typing needs the CSS Custom Highlight API (current Chrome, Edge, Safari and Firefox). Without it,
+  text is drawn as a box and fades in.
+- Inline pieces with their own background inside a paragraph (inline code, for example) show as soon
+  as typing starts, before their text is typed.
 
 - Loose text sitting directly in a container next to block elements appears with the container.
 - Content that is hidden when the page loads (closed panels, inactive tabs) is left alone.

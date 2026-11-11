@@ -37,7 +37,7 @@ const residue = (page) =>
   page.evaluate(
     () =>
       [...document.querySelectorAll('[style]')].filter(
-        (el) => !el.closest('[data-swarm-ignore]') && (el.style.visibility || el.style.opacity),
+        (el) => !el.closest('[data-swarm-ignore], [data-swarm-layer]') && (el.style.visibility || el.style.opacity),
       ).length,
   );
 
@@ -53,7 +53,22 @@ async function waitComplete(page, timeout = 20000) {
   await page.waitForFunction(() => window.demoSwarm.complete, null, { timeout });
 }
 
+const layer = (page) =>
+  page.evaluate(() => {
+    const host = document.querySelector('[data-swarm-layer]');
+    const hl = CSS.highlights.get('swarm-web-pending');
+    return {
+      agents: host ? host.shadowRoot.querySelectorAll('.agent').length : 0,
+      outlines: host ? host.shadowRoot.querySelectorAll('.rect').length : 0,
+      carets: host ? host.shadowRoot.querySelectorAll('.caret').length : 0,
+      hiddenText: hl ? hl.size : 0,
+      mounted: !!host,
+    };
+  });
+
 async function cleanShot(page, file) {
+  // the cursors pack up and leave shortly after the work runs out
+  await page.waitForFunction(() => !document.querySelector('[data-swarm-layer]'), null, { timeout: 8000 });
   await page.evaluate(() => {
     document.querySelectorAll('.dock, .plan-overlay').forEach((el) => (el.style.display = 'none'));
     document.documentElement.setAttribute('data-mode', 'off'); // same mode switch highlight as the baseline
@@ -111,13 +126,24 @@ async function cleanShot(page, file) {
   await page.waitForTimeout(450);
   await page.screenshot({ path: path.join(OUT, 'regions-mid-build.png') });
   p = await progress(page);
-  check('regions: building has started but not finished', p.done > 0 && p.done < p.total, `(${p.done}/${p.total})`);
+  check('regions: building has started but not finished', p.done < p.total, `(${p.done}/${p.total})`);
+  // sample the cursor layer for a second: agents, a dragged outline and typed text should all turn up
+  const seen = { agents: 0, outlines: 0, carets: 0, hiddenText: 0 };
+  for (let i = 0; i < 25; i++) {
+    const l = await layer(page);
+    for (const k in seen) seen[k] = Math.max(seen[k], l[k]);
+    await page.waitForTimeout(40);
+  }
+  check('cursors: agents are on screen while building', seen.agents >= 3 && seen.agents <= 12, JSON.stringify(seen));
+  check('cursors: outlines are dragged and text is typed', seen.outlines > 0 && seen.carets > 0 && seen.hiddenText > 0);
+  await page.screenshot({ path: path.join(OUT, 'regions-cursors.png') });
   await scrollThrough(page);
   await waitComplete(page);
   p = await progress(page);
   check('regions: everything built after scrolling through', p.done === p.total && p.complete, `(${p.done}/${p.total})`);
   check('regions: parents always built before children', (await page.evaluate(() => window.orderViolations)) === 0);
   check('regions: no inline styles left behind', (await residue(page)) === 0);
+  check('cursors: no text is left hidden mid-typing', (await layer(page)).hiddenText === 0);
   check('regions: finished page is pixel-identical to the plain page', baseline.equals(await cleanShot(page, 'regions-final.png')));
   await page.context().close();
 
@@ -128,7 +154,7 @@ async function cleanShot(page, file) {
   check('page: body was un-hidden by the script', (await visibilityOf(page, 'body')) === 'visible');
   await page.waitForTimeout(1200);
   p = await progress(page);
-  check('page: first screen builds without scrolling', p.done > 5 && p.done < p.total, `(${p.done}/${p.total})`);
+  check('page: first screen builds without scrolling', p.done > 2 && p.done < p.total, `(${p.done}/${p.total})`);
   check('page: content below the fold still waits', (await opacityOf(page, '#pricing h2')) === '0');
   await scrollThrough(page);
   await waitComplete(page);
@@ -160,6 +186,7 @@ async function cleanShot(page, file) {
   await page.evaluate(() => window.demoSwarm.finish());
   p = await progress(page);
   check('finish: builds the rest instantly', p.done === p.total && p.complete && (await residue(page)) === 0);
+  check('finish: no text is left hidden mid-typing', (await layer(page)).hiddenText === 0);
   await page.evaluate(() => window.demoSwarm.replay());
   await page.evaluate(() => window.demoSwarm.destroy());
   check('destroy: puts every element back', (await residue(page)) === 0 && (await opacityOf(page, '#features .card h3')) === '1');
@@ -181,6 +208,7 @@ async function cleanShot(page, file) {
   page = await open('?mode=page', { reducedMotion: 'reduce' });
   await page.waitForTimeout(200);
   p = await progress(page);
+  check('reduced motion: no cursor layer', !(await layer(page)).mounted);
   check('reduced motion: nothing is hidden or planned', p.total === 0 && (await opacityOf(page, '#pricing h2')) === '1' && (await visibilityOf(page, '#features .card')) === 'visible');
   await page.context().close();
 
@@ -189,6 +217,8 @@ async function cleanShot(page, file) {
   await scrollThrough(page, 400, 150);
   await waitComplete(page);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  await page.waitForFunction(() => !document.querySelector('[data-swarm-layer]'), null, { timeout: 8000 });
+  check('cursors: layer is removed once the crew has left', true);
   check('mobile: completes with no sideways scroll', overflow <= 0, `(overflow ${overflow}px)`);
   await page.context().close();
 

@@ -2,9 +2,16 @@
 // screen, and reveals them as the scheduler hands out agents.
 
 import { plan } from './planner.js';
-import { hide, show, reveal, TRAVEL } from './reveal.js';
+import { hide, show } from './reveal.js';
+import { perform } from './choreo.js';
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Stop whatever is happening on screen for a task and leave its element shown.
+function settle(task) {
+  if (task.anim) task.anim.cancel();
+  task.anim = null;
+  if (task.cleanup) task.cleanup();
+  show(task);
+}
 
 export function markReady(el) {
   el.setAttribute('data-swarm-ready', '');
@@ -90,9 +97,12 @@ export class Region {
     }
   }
 
-  async build(task) {
+  async build(task, agent) {
     const epoch = this.epoch;
-    const live = () => epoch === this.epoch && task.state === 'build';
+    const ctx = {
+      live: () => epoch === this.epoch && task.state === 'build',
+      speed: () => this.opts.speed,
+    };
     task.state = 'build';
     this.ready.delete(task);
     this.building++;
@@ -101,25 +111,20 @@ export class Region {
       this.emit('start', this);
     }
     try {
-      await sleep(TRAVEL / this.opts.speed);
-      if (!live()) return;
-      task.anim = reveal(task, this.opts.speed);
-      if (task.anim) await task.anim.finished.catch(() => {});
-      task.anim = null;
-      if (!live()) return;
-      this.complete(task);
+      await perform(agent, task, ctx);
+    } catch (err) {
+      console.error('swarm-web: a build step failed, showing the element as is', err);
     } finally {
       this.building--;
+      agent.release();
+      // also reached when a step failed: the element must never stay hidden
+      if (ctx.live()) this.complete(task);
     }
   }
 
   complete(task) {
     if (task.state === 'done') return;
-    if (task.anim) {
-      task.anim.cancel();
-      task.anim = null;
-    }
-    show(task);
+    settle(task);
     task.state = 'done';
     this.ready.delete(task);
     if (this.io) this.io.unobserve(task.el);
@@ -159,9 +164,7 @@ export class Region {
     let changed = false;
     for (const task of this.tasks) {
       if (task.state === 'done') continue;
-      if (task.anim) task.anim.cancel();
-      task.anim = null;
-      show(task);
+      settle(task);
       task.state = 'done';
       this.done++;
       changed = true;
@@ -176,8 +179,7 @@ export class Region {
     if (this.destroyed) return;
     this.epoch++;
     for (const task of this.tasks) {
-      if (task.anim) task.anim.cancel();
-      task.anim = null;
+      settle(task);
       task.state = 'wait';
       task.inView = false;
       hide(task);
@@ -199,9 +201,7 @@ export class Region {
     this.destroyed = true;
     this.epoch++;
     for (const task of this.tasks) {
-      if (task.anim) task.anim.cancel();
-      task.anim = null;
-      show(task);
+      settle(task);
     }
     if (this.io) this.io.disconnect();
     this.io = null;

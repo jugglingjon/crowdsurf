@@ -9,11 +9,13 @@ import { Region, markReady } from './region.js';
 import { scheduler } from './scheduler.js';
 
 export const DEFAULTS = {
-  agents: 4, // agents working at once in calm conditions
+  agents: 5, // agents working at once in calm conditions
   maxAgents: 12, // ceiling when a backlog builds up (fast scrolling)
   speed: 1, // build speed multiplier
   rootMargin: '0px', // IntersectionObserver margin: when an element counts as on screen
   ignore: '[data-swarm-ignore]', // elements (and their contents) the swarm leaves alone
+  names: null, // cursor names, e.g. ['Ada', 'Grace']; defaults to a built-in list
+  colors: null, // cursor colors as 6-digit hex, e.g. ['#6247ea']; defaults to a built-in palette
   respectReducedMotion: true, // do nothing for visitors who prefer reduced motion
 };
 

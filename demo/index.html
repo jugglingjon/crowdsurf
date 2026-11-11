@@ -33,11 +33,12 @@
 
 <main>
   <section class="hero">
-    <p class="eyebrow">Phase 1 preview</p>
+    <p class="eyebrow">Phase 2 preview</p>
     <h1>A page that gets built while you scroll it.</h1>
     <p class="lede">
-      This demo runs the planner and the scheduler. Elements wait hidden, then appear in build order as they
-      scroll into view. The cursors that will do the building arrive in phase 2. For now each element simply fades in.
+      Elements wait hidden until they scroll into view. Then a small crew of cursors builds them: boxes and
+      images are dragged out with a live size readout, and text is typed into place. Everything you end up with
+      is the page's own markup.
     </p>
     <div class="modes" role="group" aria-label="Demo mode">
       <a class="mode" data-for="regions" href="?mode=regions">
@@ -160,7 +161,7 @@
         <p class="price"><span class="amount">$0</span> <span class="per">per month</span></p>
         <ul>
           <li>One region per page</li>
-          <li>Fade-in builds</li>
+          <li>Boxes and typed text</li>
           <li>Community support</li>
         </ul>
         <button class="btn" type="button">Choose Starter</button>
@@ -171,7 +172,7 @@
         <p class="price"><span class="amount">$12</span> <span class="per">per month</span></p>
         <ul>
           <li>Unlimited regions</li>
-          <li>Cursor choreography</li>
+          <li>Lines and duplicates</li>
           <li>Sound design</li>
         </ul>
         <button class="btn btn-solid" type="button">Choose Studio</button>
@@ -195,16 +196,16 @@
           <tr><th scope="col">Phase</th><th scope="col">Adds</th><th scope="col">Status</th></tr>
         </thead>
         <tbody>
-          <tr><td>1</td><td>Planner, scheduler, scroll-triggered regions</td><td><span class="pill pill-on">This demo</span></td></tr>
-          <tr><td>2</td><td>Cursor layer, box drawing and typing</td><td><span class="pill">Next</span></td></tr>
-          <tr><td>3</td><td>Media, lines and duplicated siblings</td><td><span class="pill">Planned</span></td></tr>
+          <tr><td>1</td><td>Planner, scheduler, scroll-triggered regions</td><td><span class="pill">Done</span></td></tr>
+          <tr><td>2</td><td>Cursor layer, box drawing and typing</td><td><span class="pill pill-on">This demo</span></td></tr>
+          <tr><td>3</td><td>Media, lines and duplicated siblings</td><td><span class="pill">Next</span></td></tr>
           <tr><td>4</td><td>Once-only option, teardown, polish</td><td><span class="pill">Planned</span></td></tr>
         </tbody>
       </table>
     </div>
 
     <form class="signup" action="#" onsubmit="return false">
-      <label for="email">Get notified when phase 2 lands</label>
+      <label for="email">Get notified when phase 3 lands</label>
       <div class="signup-row">
         <input id="email" type="email" placeholder="you@example.com" autocomplete="off">
         <select aria-label="How often">
@@ -230,8 +231,8 @@
       <p>Hidden content is left alone. The planner only takes elements that are visible when it runs.</p>
     </details>
     <details>
-      <summary>Is the cursor animation here yet?</summary>
-      <p>No. Phase 1 is the plumbing: deciding what to build, in which order, and when. The fade is a placeholder.</p>
+      <summary>How is the text typed without changing the markup?</summary>
+      <p>The text is already in place. The part not typed yet is made transparent with a CSS custom highlight, which shrinks as the cursor advances. No wrapper elements are added.</p>
     </details>
   </section>
 </main>
