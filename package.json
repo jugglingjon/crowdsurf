@@ -1,0 +1,18 @@
+{
+  "name": "swarm-web",
+  "version": "0.1.0",
+  "description": "Build part or all of a web page in front of the reader as they scroll.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./auto": "./src/auto.js",
+    "./prehide.css": "./src/prehide.css"
+  },
+  "files": ["src"],
+  "scripts": {
+    "serve": "python3 -m http.server 4173",
+    "test": "node test/smoke.cjs"
+  },
+  "private": true
+}

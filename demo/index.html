@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>swarm-web demo</title>
+<script>
+  // ?mode=regions (default) | page | off
+  (function () {
+    var mode = new URLSearchParams(location.search).get('mode') || 'regions';
+    if (!/^(regions|page|off)$/.test(mode)) mode = 'regions';
+    document.documentElement.setAttribute('data-mode', mode);
+  })();
+</script>
+<link rel="stylesheet" href="../src/prehide.css">
+<link rel="stylesheet" href="demo.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="./">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 3l15 7-6.5 2.2L10 19z" fill="currentColor"/></svg>
+    <span>swarm-web</span>
+  </a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="#features">Features</a>
+    <a href="#numbers">Numbers</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+  <a class="btn btn-small" href="https://github.com/jugglingjon/swarm-web">GitHub</a>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="eyebrow">Phase 1 preview</p>
+    <h1>A page that gets built while you scroll it.</h1>
+    <p class="lede">
+      This demo runs the planner and the scheduler. Elements wait hidden, then appear in build order as they
+      scroll into view. The cursors that will do the building arrive in phase 2. For now each element simply fades in.
+    </p>
+    <div class="modes" role="group" aria-label="Demo mode">
+      <a class="mode" data-for="regions" href="?mode=regions">
+        <strong>Regions</strong>
+        <span>Only the three marked sections build</span>
+      </a>
+      <a class="mode" data-for="page" href="?mode=page">
+        <strong>Whole page</strong>
+        <span>Everything builds, top to bottom</span>
+      </a>
+      <a class="mode" data-for="off" href="?mode=off">
+        <strong>Off</strong>
+        <span>The plain page, for comparison</span>
+      </a>
+    </div>
+    <p class="hint">Scroll down <span aria-hidden="true">↓</span></p>
+  </section>
+
+  <section id="features" class="section" data-swarm>
+    <div class="section-head">
+      <p class="eyebrow">Region one</p>
+      <h2>Cards in a grid</h2>
+      <p>Each card is a box. Its icon, heading and copy wait for the box, then build inside it.</p>
+    </div>
+    <div class="cards">
+      <article class="card">
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true"><rect x="4" y="4" width="24" height="24" rx="6"/></svg>
+        <h3>Works on real elements</h3>
+        <p>Nothing is copied or screenshotted. The swarm reveals the page's own markup in place.</p>
+        <a class="link" href="#numbers">See the numbers</a>
+      </article>
+      <article class="card">
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"/></svg>
+        <h3>Scroll sets the pace</h3>
+        <p>Work unlocks as it enters the viewport. Stop scrolling and the swarm catches up, then waits.</p>
+        <a class="link" href="#pricing">Jump to pricing</a>
+      </article>
+      <article class="card">
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3l13 24H3z"/></svg>
+        <h3>Parents before children</h3>
+        <p>A container is built first, and only then the things inside it. Order follows the reading direction.</p>
+        <a class="link" href="#faq">Read the FAQ</a>
+      </article>
+      <article class="card">
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="9" width="26" height="14" rx="7"/></svg>
+        <h3>One shared crew</h3>
+        <p>Every region draws from the same pool of agents, so several regions never double the crowd.</p>
+        <a class="link" href="#features">Back to the top</a>
+      </article>
+      <article class="card">
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M5 5h22v22H5z M11 11h10v10H11z" fill-rule="evenodd"/></svg>
+        <h3>Leaves no trace</h3>
+        <p>When an element is built its inline styles go back to exactly what they were before.</p>
+        <a class="link" href="#numbers">How it is checked</a>
+      </article>
+      <article class="card">
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4a12 12 0 1 0 12 12h-12z"/></svg>
+        <h3>Skips what it should</h3>
+        <p>Visitors who prefer reduced motion get the finished page straight away, with nothing hidden.</p>
+        <a class="link" href="#faq">More on that</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="section plain">
+    <div class="section-head">
+      <p class="eyebrow">Not targeted</p>
+      <h2>This section is left alone in regions mode</h2>
+      <p>
+        It is ordinary markup with no <code>data-swarm</code> attribute, so it is on the page from the first paint.
+        In whole-page mode it builds like everything else.
+      </p>
+    </div>
+    <pre class="code"><code>&lt;section data-swarm&gt; ... &lt;/section&gt;
+
+&lt;script type="module"&gt;
+  import { swarm } from './src/index.js';
+  swarm();                 // every [data-swarm] element
+  // swarm('#pricing');    // one region
+  // swarm(document.body); // the whole page
+&lt;/script&gt;</code></pre>
+  </section>
+
+  <section id="numbers" class="section band" data-swarm>
+    <div class="band-inner">
+      <div class="band-copy">
+        <p class="eyebrow">Region two</p>
+        <h2>Media, stats and a dark band</h2>
+        <p>The band is one large box. Images and inline SVG count as media and build as a single piece.</p>
+        <ul class="ticks">
+          <li>Images wait even if they have not loaded yet</li>
+          <li>List items are separate pieces of text</li>
+          <li>Keyboard focus builds a link straight away</li>
+        </ul>
+        <a class="btn btn-light" href="#pricing">Continue to pricing</a>
+      </div>
+      <figure class="shot">
+        <img alt="Abstract illustration of overlapping shapes" width="520" height="360"
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 520 360'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c5cff'/%3E%3Cstop offset='1' stop-color='%23ff7a59'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='520' height='360' fill='url(%23g)'/%3E%3Ccircle cx='150' cy='170' r='95' fill='%23ffffff' fill-opacity='.22'/%3E%3Crect x='250' y='80' width='200' height='200' rx='28' fill='%23ffffff' fill-opacity='.28'/%3E%3Cpath d='M60 300l120-130 90 80 70-60 120 110z' fill='%2316181d' fill-opacity='.35'/%3E%3C/svg%3E">
+        <figcaption>An image, built as one piece of media.</figcaption>
+      </figure>
+    </div>
+    <dl class="stats">
+      <div class="stat"><dt>Dependencies</dt><dd>0</dd></div>
+      <div class="stat"><dt>Elements cloned</dt><dd>0</dd></div>
+      <div class="stat"><dt>Agents by default</dt><dd>4</dd></div>
+      <div class="stat"><dt>Ceiling when rushed</dt><dd>12</dd></div>
+    </dl>
+  </section>
+
+  <section id="pricing" class="section" data-swarm data-swarm-speed="1.5">
+    <div class="section-head">
+      <p class="eyebrow">Region three, at 1.5× speed</p>
+      <h2>Pricing cards, a table and a form</h2>
+      <p>Buttons, table cells and form controls are all picked up as their own tasks.</p>
+    </div>
+    <div class="plans">
+      <article class="plan">
+        <h3>Starter</h3>
+        <p class="price"><span class="amount">$0</span> <span class="per">per month</span></p>
+        <ul>
+          <li>One region per page</li>
+          <li>Fade-in builds</li>
+          <li>Community support</li>
+        </ul>
+        <button class="btn" type="button">Choose Starter</button>
+      </article>
+      <article class="plan plan-featured">
+        <span class="badge">Popular</span>
+        <h3>Studio</h3>
+        <p class="price"><span class="amount">$12</span> <span class="per">per month</span></p>
+        <ul>
+          <li>Unlimited regions</li>
+          <li>Cursor choreography</li>
+          <li>Sound design</li>
+        </ul>
+        <button class="btn btn-solid" type="button">Choose Studio</button>
+      </article>
+      <article class="plan">
+        <h3>Agency</h3>
+        <p class="price"><span class="amount">$40</span> <span class="per">per month</span></p>
+        <ul>
+          <li>Everything in Studio</li>
+          <li>Custom cursor names</li>
+          <li>Priority support</li>
+        </ul>
+        <button class="btn" type="button">Choose Agency</button>
+      </article>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <caption>What each phase adds</caption>
+        <thead>
+          <tr><th scope="col">Phase</th><th scope="col">Adds</th><th scope="col">Status</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Planner, scheduler, scroll-triggered regions</td><td><span class="pill pill-on">This demo</span></td></tr>
+          <tr><td>2</td><td>Cursor layer, box drawing and typing</td><td><span class="pill">Next</span></td></tr>
+          <tr><td>3</td><td>Media, lines and duplicated siblings</td><td><span class="pill">Planned</span></td></tr>
+          <tr><td>4</td><td>Once-only option, teardown, polish</td><td><span class="pill">Planned</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <form class="signup" action="#" onsubmit="return false">
+      <label for="email">Get notified when phase 2 lands</label>
+      <div class="signup-row">
+        <input id="email" type="email" placeholder="you@example.com" autocomplete="off">
+        <select aria-label="How often">
+          <option>Every phase</option>
+          <option>Final release only</option>
+        </select>
+        <button class="btn btn-solid" type="submit">Notify me</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="faq" class="section plain">
+    <div class="section-head">
+      <p class="eyebrow">Not targeted</p>
+      <h2>FAQ</h2>
+    </div>
+    <details open>
+      <summary>What happens if I jump straight to the bottom?</summary>
+      <p>Anything you skipped past is finished instantly, without animating. Only what is on screen gets built in front of you.</p>
+    </details>
+    <details>
+      <summary>What about content inside a closed panel like this one?</summary>
+      <p>Hidden content is left alone. The planner only takes elements that are visible when it runs.</p>
+    </details>
+    <details>
+      <summary>Is the cursor animation here yet?</summary>
+      <p>No. Phase 1 is the plumbing: deciding what to build, in which order, and when. The fade is a placeholder.</p>
+    </details>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>swarm-web, work in progress.</p>
+  <p>
+    Inspired by <a href="https://califa.github.io/swarm-site/">Swarm</a> by Joel Califa and
+    <a href="https://github.com/DhvanilPatel/swarm-cursors">Swarm Rebuild</a> by Dhvanil Patel.
+  </p>
+</footer>
+
+<aside class="dock" data-swarm-ignore aria-label="Demo controls">
+  <div class="dock-row">
+    <strong class="dock-title">Build</strong>
+    <span class="dock-count" id="count">–</span>
+  </div>
+  <div class="meter"><div class="meter-fill" id="meter"></div></div>
+  <div class="dock-row dock-small">
+    <span id="agents">0 agents working</span>
+    <span id="kinds"></span>
+  </div>
+  <div class="dock-buttons">
+    <button type="button" id="replay">Replay</button>
+    <button type="button" id="finish">Finish</button>
+    <button type="button" id="speed" title="Build speed">1×</button>
+    <button type="button" id="planbtn" aria-pressed="false" title="Outline every planned task">Show plan</button>
+  </div>
+  <div class="legend" id="legend" hidden>
+    <span><i class="k-box"></i>box</span>
+    <span><i class="k-text"></i>text</span>
+    <span><i class="k-media"></i>media</span>
+  </div>
+</aside>
+
+<script type="module" src="demo.js"></script>
+</body>
+</html>
