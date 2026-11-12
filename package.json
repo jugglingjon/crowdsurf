@@ -1,8 +1,15 @@
 {
   "name": "crowdsurf",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A crew of cursors builds part or all of your web page in front of the reader as they scroll.",
-  "keywords": ["scroll", "animation", "cursor", "reveal", "typing", "intersection-observer"],
+  "keywords": [
+    "scroll",
+    "animation",
+    "cursor",
+    "reveal",
+    "typing",
+    "intersection-observer"
+  ],
   "homepage": "https://jugglingjon.github.io/crowdsurf/",
   "repository": {
     "type": "git",
@@ -25,8 +32,19 @@
     "./prehide.css": "./dist/prehide.css",
     "./package.json": "./package.json"
   },
-  "files": ["dist", "src", "docs"],
-  "sideEffects": ["./dist/crowdsurf.auto.js", "./dist/*.min.js", "./src/auto.js", "./src/global.js", "./src/global-auto.js", "*.css"],
+  "files": [
+    "dist",
+    "src",
+    "docs"
+  ],
+  "sideEffects": [
+    "./dist/crowdsurf.auto.js",
+    "./dist/*.min.js",
+    "./src/auto.js",
+    "./src/global.js",
+    "./src/global-auto.js",
+    "*.css"
+  ],
   "scripts": {
     "build": "node scripts/build.cjs",
     "serve": "python3 -m http.server 4173",
