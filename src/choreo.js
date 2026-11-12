@@ -66,11 +66,40 @@ const ICON_SIZE = 64; // media no larger than this comes along with a duplicated
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 const sign = () => (Math.random() < 0.5 ? -1 : 1);
 
-// Roll for a slip on this step, and count it if it happens.
-function slips(ctx) {
-  if (Math.random() >= ctx.mistakes()) return false;
-  ctx.slipped();
-  return true;
+// The kinds of slip, and how each is weighted by default (the `slips` option). A
+// weight multiplies how often that kind happens: 0 turns it off, 2 doubles it.
+//
+//   oversize   an outline drawn too big, then pulled back in from the corner
+//   misplace   an outline drawn in the wrong spot, then moved
+//   overshoot  a line drawn too long, then pulled back
+//   nudge      a duplicate dropped off target, then nudged into place
+//   retype     text typed part way, a few characters deleted, then finished
+//   place      a piece built out of place, then moved once it is finished
+//   size       a piece built too big, then resized from the corner once finished
+//   round      a rounded piece built square, then rounded off
+export const SLIP_KINDS = ['oversize', 'misplace', 'overshoot', 'nudge', 'retype', 'place', 'size', 'round'];
+
+// Roll for a slip at this step. `kinds` are the ones possible here; `share` is how
+// much of the `mistakes` rate they get between them at default weights. Each kind's
+// own rate is mistakes x share / kinds.length x its weight, so with every weight at 1
+// the step slips at mistakes x share, split evenly. Returns the kind, or null.
+function slipKind(ctx, kinds, share = 1) {
+  const rate = ctx.mistakes();
+  if (!rate) return null;
+  const weights = kinds.map((k) => ctx.weight(k));
+  const total = weights.reduce((a, b) => a + b, 0);
+  if (!total || Math.random() >= Math.min(1, (rate * share * total) / kinds.length)) return null;
+  let pick = Math.random() * total;
+  let kind = kinds[kinds.length - 1];
+  for (let i = 0; i < kinds.length; i++) {
+    pick -= weights[i];
+    if (pick < 0) {
+      kind = kinds[i];
+      break;
+    }
+  }
+  ctx.slipped(kind);
+  return kind;
 }
 
 // Hold still for a moment (the "hm, that's not right" beat).
@@ -78,10 +107,11 @@ function pause(agent, ctx, ms) {
   return agent.crew.tween(ms / ctx.speed(), () => {}, ctx.live);
 }
 
-// How a rectangle is off: nudged out of place, or too big. Null for no slip.
-function rectSlip(ctx, r, canResize = true) {
-  if (!slips(ctx)) return null;
-  if (canResize && Math.random() < 0.5) {
+// How a rectangle is off: too big, or out of place. Null for no slip.
+function rectSlip(ctx, r, kinds) {
+  const kind = slipKind(ctx, kinds);
+  if (!kind) return null;
+  if (kind === 'oversize') {
     return { ox: 0, oy: 0, ew: Math.min(r.w * rand(0.08, 0.28), 70), eh: Math.min(r.h * rand(0.08, 0.3), 70) };
   }
   return { ox: sign() * rand(8, 28), oy: sign() * rand(6, 22), ew: 0, eh: 0 };
@@ -145,7 +175,7 @@ export async function perform(agent, task, ctx) {
 
 // ------------------------------------------- built out of place or wrong size
 
-const LATE_SHARE = 0.4; // of all slips, how many are the caught-late kinds
+const LATE_SHARE = 0.4; // how often a piece gets one of the caught-late kinds, as a share of `mistakes`
 const px = (v) => parseFloat(v) || 0;
 
 export function clearShift(task) {
@@ -170,7 +200,7 @@ function radiusPx(value, r) {
 // animation, the keyframe that holds the wrong state, and the keyframe for the
 // right one.
 function displace(task, ctx) {
-  if (Math.random() >= ctx.mistakes() * LATE_SHARE) return false;
+  if (!ctx.mistakes()) return false;
   const { el } = task;
   if (typeof el.animate !== 'function' || !(window.CSS && CSS.supports && CSS.supports('translate', '1px 1px'))) return false;
   const cs = getComputedStyle(el);
@@ -193,7 +223,8 @@ function displace(task, ctx) {
   const kinds = ['place'];
   if (sizable) kinds.push('size');
   if (radius >= MIN_RADIUS) kinds.push('round');
-  const kind = kinds[Math.floor(Math.random() * kinds.length)];
+  const kind = slipKind(ctx, kinds, LATE_SHARE);
+  if (!kind) return false;
 
   let hold = null;
   let rest = null;
@@ -231,7 +262,6 @@ function displace(task, ctx) {
   task.shift.hold = hold;
   task.shift.rest = rest;
   task.shift.anim = el.animate([hold, hold], { duration: 1000, fill: 'both' });
-  ctx.slipped();
   return true;
 }
 
@@ -421,7 +451,7 @@ async function dragOut(agent, task, ctx, look) {
   const { el } = task;
   const crew = agent.crew;
   const start = pageRect(el);
-  const slip = task.shift ? null : rectSlip(ctx, start); // one slip per piece is plenty
+  const slip = task.shift ? null : rectSlip(ctx, start, ['oversize', 'misplace']); // one slip per piece is plenty
   const size = (g) => `${Math.round(g.w)} × ${Math.round(g.h)}`;
   if (!(await agent.travel(() => off(pageRect(el), slip, 1), ctx))) return null;
 
@@ -569,7 +599,7 @@ async function drawLines(agent, task, ctx, beforeShow) {
     const [a, b] = segment(el, side);
     const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     // a slip here is a line drawn too long, then pulled back
-    const extra = slips(ctx) ? Math.min(length * rand(0.06, 0.18), 60) : 0;
+    const extra = slipKind(ctx, ['overshoot']) ? Math.min(length * rand(0.06, 0.18), 60) : 0;
     // the end point, `e` of the way along, with `k` (1 -> 0) of the overshoot applied
     const draw = (e, k) => {
       const [from, to] = segment(el, side);
@@ -652,7 +682,7 @@ async function duplicate(agent, task, ctx, beforeShow) {
   const s0 = pageRect(source.el);
   const d0 = pageRect(el);
   // a slip here is a copy dropped slightly off target, then nudged into place
-  const slip = task.shift ? null : rectSlip(ctx, d0, false);
+  const slip = task.shift ? null : rectSlip(ctx, d0, ['nudge']);
   const put = (g) => {
     select();
     ghost.set(g.x, g.y, g.w, g.h);
@@ -746,7 +776,7 @@ async function typeText(agent, task, ctx) {
     );
 
   let typed;
-  if (typer.count >= 8 && slips(ctx)) {
+  if (typer.count >= 8 && slipKind(ctx, ['retype'])) {
     // type part of it, think better of the last few characters, delete them, carry on
     const stop = Math.round(typer.count * rand(0.35, 0.9));
     const back = stop - Math.min(stop - 1, Math.round(rand(3, 9)));

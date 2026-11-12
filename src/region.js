@@ -53,6 +53,7 @@ export class Region {
     this.done = 0;
     this.building = 0;
     this.slips = 0; // deliberate mistakes played so far (see the `mistakes` option)
+    this.slipCounts = {}; // the same, by kind
     this.chores = new Set(); // containers built out of place or at the wrong size, waiting to be put right
     this.dallies = 0; // times an agent dawdled between jobs (see the `dillyDally` option)
     this.epoch = 0; // bumped to abandon builds that are mid-flight
@@ -253,7 +254,15 @@ export class Region {
       speed: () => this.opts.speed,
       natural: () => !!this.opts.naturalMovement,
       mistakes: () => Math.min(1, Math.max(0, Number(this.opts.mistakes) || 0)),
-      slipped: () => this.slips++,
+      // how much more or less often one kind of slip happens (the `slips` option)
+      weight: (kind) => {
+        const w = this.opts.slips ? this.opts.slips[kind] : undefined;
+        return w == null ? 1 : Math.max(0, Number(w) || 0);
+      },
+      slipped: (kind) => {
+        this.slips++;
+        this.slipCounts[kind] = (this.slipCounts[kind] || 0) + 1;
+      },
       later: (t) => {
         if (epoch !== this.epoch) return;
         this.chores.add({ chore: true, task: t, region: this, id: t.id, x: t.x, y: t.y, running: false });
@@ -387,6 +396,7 @@ export class Region {
     this.clearChores();
     this.done = 0;
     this.slips = 0;
+    this.slipCounts = {};
     this.dallies = 0;
     this.started = false;
     this.completed = false;

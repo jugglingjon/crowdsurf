@@ -1,6 +1,18 @@
-import { crowdsurf, activeAgents, forget } from '../src/index.js';
+import { crowdsurf, activeAgents, forget, DEFAULTS } from '../src/index.js';
 
 const mode = document.documentElement.getAttribute('data-mode');
+
+// the kinds of slip, as the panel names them
+const MIX = {
+  oversize: 'Box too big',
+  misplace: 'Box in wrong spot',
+  overshoot: 'Line too long',
+  nudge: 'Copy off target',
+  retype: 'Text retyped',
+  place: 'Built out of place',
+  size: 'Built wrong size',
+  round: 'Square corners',
+};
 const $ = (id) => document.getElementById(id);
 
 if (mode !== 'off') {
@@ -51,6 +63,12 @@ if (mode !== 'off') {
     let slipCount = 0;
     for (const region of instance.regions) slipCount += region.slips;
     $('slips').textContent = imperfect ? `${slipCount} slip${slipCount === 1 ? '' : 's'}` : '';
+    for (const kind of Object.keys(MIX)) {
+      let n = 0;
+      for (const region of instance.regions) n += region.slipCounts[kind] || 0;
+      const cell = document.getElementById('mix-n-' + kind);
+      if (cell) cell.textContent = n || '';
+    }
     let dallyCount = 0;
     for (const region of instance.regions) dallyCount += region.dallies;
     $('dallies').textContent = dally ? `${dallyCount} so far` : '';
@@ -72,12 +90,44 @@ if (mode !== 'off') {
 
   // -------------------------------------------------- imperfect placement
 
+  // One slider per kind of slip. A weight multiplies how often that kind happens.
+  function buildMix() {
+    for (const [kind, label] of Object.entries(MIX)) {
+      const row = document.createElement('div');
+      row.className = 'mix-row';
+      row.innerHTML = `<label for="mix-${kind}">${label}</label><input type="range" id="mix-${kind}" min="0" max="3" step="0.5"><output for="mix-${kind}"></output><b id="mix-n-${kind}" title="Times it has happened"></b>`;
+      $('mix').appendChild(row);
+      row.querySelector('input').addEventListener('input', (e) => {
+        instance.set({ slips: { [kind]: Number(e.target.value) } });
+        syncMix();
+      });
+    }
+    $('mix-reset').addEventListener('click', (e) => {
+      e.preventDefault(); // it sits in the <summary>: don't fold the section
+      instance.set({ slips: { ...DEFAULTS.slips } });
+      syncMix();
+    });
+    syncMix();
+  }
+
+  function syncMix() {
+    for (const kind of Object.keys(MIX)) {
+      const weight = instance.options.slips[kind];
+      const input = $('mix-' + kind);
+      input.value = String(weight);
+      input.nextElementSibling.textContent = weight + '×';
+      input.parentElement.classList.toggle('is-zero', weight === 0);
+    }
+  }
+  buildMix();
+
   function syncImperfect() {
     $('imperfect').checked = imperfect;
     $('howoften').value = String(Math.round(often * 100));
     $('howoften').disabled = !imperfect;
     $('howoften-out').textContent = Math.round(often * 100) + '%';
     $('howoften-row').classList.toggle('is-off', !imperfect);
+    $('mix-box').classList.toggle('is-off', !imperfect);
     instance.set({ mistakes: imperfect ? often : 0 });
     render();
   }

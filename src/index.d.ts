@@ -1,3 +1,15 @@
+/**
+ * The kinds of slip the `mistakes` option can produce.
+ *
+ * Caught while drawing: `oversize` (an outline too big), `misplace` (an outline in the
+ * wrong spot), `overshoot` (a line too long), `nudge` (a duplicate dropped off target),
+ * `retype` (text partly deleted and typed again).
+ *
+ * Caught once the piece is built: `place` (out of place, then moved), `size` (too big,
+ * then resized from the corner), `round` (square corners, then rounded off).
+ */
+export type SlipKind = 'oversize' | 'misplace' | 'overshoot' | 'nudge' | 'retype' | 'place' | 'size' | 'round';
+
 /** Options for {@link crowdsurf}. Every one is optional. */
 export interface CrowdsurfOptions {
   /** Cursors working at once in calm conditions. Default `5`. */
@@ -8,6 +20,11 @@ export interface CrowdsurfOptions {
   speed?: number;
   /** Share of pieces (0 to 1) built with a slip that is then corrected. Default `0`, which is off. */
   mistakes?: number;
+  /**
+   * How much more or less often each kind of slip happens. A weight multiplies that
+   * kind's rate: `0` turns it off, `2` doubles it. Kinds left out stay at `1`.
+   */
+  slips?: Partial<Record<SlipKind, number>>;
   /** Cursors travel in hand-like curves, sometimes overshooting a little. Default `false`. */
   naturalMovement?: boolean;
   /** Between jobs a cursor sometimes loiters, or reads along a line of text. Default `false`. */
@@ -44,6 +61,8 @@ export interface CrowdsurfRegion {
   readonly completed: boolean;
   /** Deliberate mistakes played so far (see `mistakes`). */
   readonly slips: number;
+  /** The same, by kind. */
+  readonly slipCounts: Partial<Record<SlipKind, number>>;
   /** Times a cursor dawdled between jobs (see `dillyDally`). */
   readonly dallies: number;
 }
@@ -98,6 +117,9 @@ export function forget(): void;
 
 /** How many cursors are working right now, across every region. */
 export function activeAgents(): number;
+
+/** Every kind of slip, by name. */
+export const SLIP_KINDS: SlipKind[];
 
 /** The default value of every option. */
 export const DEFAULTS: Required<CrowdsurfOptions>;

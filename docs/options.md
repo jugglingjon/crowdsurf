@@ -17,6 +17,7 @@ const s = crowdsurf(target, options);
 | `maxAgents` | `12` | `data-crowdsurf-max-agents` | Ceiling when a backlog builds up, as when scrolling fast |
 | `speed` | `1` | `data-crowdsurf-speed` | Build speed multiplier |
 | `mistakes` | `0` | `data-crowdsurf-mistakes` | Share of pieces (0 to 1) built with a slip that is then corrected |
+| `slips` | every kind at `1` | `data-crowdsurf-slips` | How much more or less often each kind of slip happens. See [Slip mix](#slip-mix) |
 | `naturalMovement` | `false` | `data-crowdsurf-natural-movement` | Hand-like curved cursor paths |
 | `dillyDally` | `false` | `data-crowdsurf-dilly-dally` | Cursors sometimes loiter or read between jobs |
 | `once` | `false` | `data-crowdsurf-once` | Skip what a visitor has already seen: `'session'`, `true`, or a number of days |
@@ -54,9 +55,10 @@ Also exported:
 | `forget()` | Clear what `once` has remembered, so everything builds again |
 | `activeAgents()` | How many cursors are working right now |
 | `DEFAULTS` | The default value of every option |
+| `SLIP_KINDS` | The name of every kind of slip |
 
 In the script-tag build these hang off the global: `crowdsurf.forget()`, `crowdsurf.activeAgents()`,
-`crowdsurf.defaults`.
+`crowdsurf.defaults`, `crowdsurf.slipKinds`.
 
 ## DOM events
 
@@ -104,6 +106,43 @@ its neighbours stay put; `border-radius` for corners. No styles are written and 
 behind. A late slip is skipped for anything it would push past the edge of the page or that covers
 more than half the screen, and the size slip is skipped for images and table cells.
 
+### Slip mix
+
+`mistakes` sets how often slips happen. `slips` sets which ones. Each kind has a weight that
+multiplies how often it happens: `0` turns it off, `2` makes it twice as frequent, and kinds you
+leave out stay at `1`.
+
+```js
+crowdsurf('#features', {
+  mistakes: 0.3,
+  slips: { retype: 0, round: 2 }, // no retyping, twice as much corner rounding
+});
+```
+
+| Kind | When | What happens |
+| --- | --- | --- |
+| `oversize` | drawing | An outline is drawn too big, then pulled back in from the corner |
+| `misplace` | drawing | An outline is drawn in the wrong spot, then moved |
+| `overshoot` | drawing | A line is drawn too long, then pulled back |
+| `nudge` | drawing | A duplicate is dropped off target, then nudged into place |
+| `retype` | typing | Text is typed part way, a few characters deleted, then finished |
+| `place` | once built | The piece is built out of place, then moved |
+| `size` | once built | The piece is built too big, then resized from the corner |
+| `round` | once built | A rounded piece is built square, then rounded off |
+
+With every weight at `1` the rates are:
+
+- Each box or image placeholder slips at the `mistakes` rate, split evenly between `oversize` and
+  `misplace`. Each line, each duplicate and each piece of text of eight characters or more slips at
+  the `mistakes` rate too.
+- Each piece also has a `mistakes × 0.4` chance of an "once built" slip, split evenly between the
+  ones it is eligible for. A piece that gets one skips `oversize`, `misplace` and `nudge`.
+
+A weight scales its own kind and leaves the others alone, so raising one makes slips more frequent
+overall. No step can slip more than every time. The attribute form takes JSON:
+`data-crowdsurf-slips='{"retype": 0}'`. `s.set({ slips: { round: 2 } })` changes only the kinds it
+names, and each region's `slipCounts` reports how often each has happened.
+
 ## Natural cursor movement
 
 With `naturalMovement: true` cursors stop travelling in near-straight lines. Each trip is a curved
@@ -145,4 +184,4 @@ element's scrolling: content further down the panel waits until the panel is scr
 ## TypeScript
 
 Types ship with the package. The option and event shapes are exported as `CrowdsurfOptions`,
-`CrowdsurfEvent`, `CrowdsurfRegion` and `Crowdsurf` (the object `crowdsurf()` returns).
+`CrowdsurfEvent`, `CrowdsurfRegion`, `SlipKind` and `Crowdsurf` (the object `crowdsurf()` returns).

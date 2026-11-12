@@ -7,12 +7,18 @@
 
 import { Region, markReady } from './region.js';
 import { scheduler } from './scheduler.js';
+import { SLIP_KINDS } from './choreo.js';
+
+export { SLIP_KINDS };
 
 export const DEFAULTS = {
   agents: 5, // agents working at once in calm conditions
   maxAgents: 12, // ceiling when a backlog builds up (fast scrolling)
   speed: 1, // build speed multiplier
   mistakes: 0, // share of pieces (0 to 1) built with a slip that is then corrected; 0 turns it off
+  // How much more or less often each kind of slip happens. A weight multiplies that kind's rate:
+  // 0 turns it off, 2 doubles it. Kinds left out stay at 1. See SLIP_KINDS for the names.
+  slips: { oversize: 1, misplace: 1, overshoot: 1, nudge: 1, retype: 1, place: 1, size: 1, round: 1 },
   naturalMovement: false, // cursors travel in hand-like curves, sometimes overshooting a little
   dillyDally: false, // between jobs a cursor sometimes loiters, or reads along a line of text
   rootMargin: '0px', // IntersectionObserver margin: when an element counts as on screen
@@ -89,6 +95,15 @@ function dataOptions(el) {
     const attr = 'data-crowdsurf-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
     if (el.hasAttribute(attr)) out[key] = el.getAttribute(attr) !== 'false';
   }
+  // data-crowdsurf-slips='{"retype": 0, "round": 2}'
+  if (el.hasAttribute('data-crowdsurf-slips')) {
+    try {
+      const mix = JSON.parse(el.getAttribute('data-crowdsurf-slips'));
+      if (mix && typeof mix === 'object') out.slips = mix;
+    } catch (_) {
+      console.warn('crowdsurf: data-crowdsurf-slips is not valid JSON, ignoring it', el);
+    }
+  }
   // data-crowdsurf-once, ="session", or ="7" (days)
   if (el.hasAttribute('data-crowdsurf-once')) {
     const v = el.getAttribute('data-crowdsurf-once');
@@ -103,7 +118,7 @@ class Crowdsurf {
   #skipped = []; // [element, index] of targets not built because of `once`
 
   constructor(target, options) {
-    this.options = { ...DEFAULTS, ...options };
+    this.options = { ...DEFAULTS, ...options, slips: { ...DEFAULTS.slips, ...(options && options.slips) } };
     this.regions = [];
     this.destroyed = false;
     this.#target = target;
@@ -130,7 +145,8 @@ class Crowdsurf {
 
   // Set up one target. `again` builds it even if `once` says it has been seen.
   #attach(el, index, again) {
-    const opts = { ...this.options, ...dataOptions(el) };
+    const data = dataOptions(el);
+    const opts = { ...this.options, ...data, slips: { ...this.options.slips, ...data.slips } };
     const key = `${ONCE}${opts.onceKey || location.pathname}:${el.id || index}`;
     if (opts.once && !again && seen(key, opts.once)) {
       markReady(el);
@@ -193,8 +209,13 @@ class Crowdsurf {
 
   /** Change options on the fly, e.g. set({ speed: 2 }). */
   set(options) {
-    Object.assign(this.options, options);
-    for (const region of this.regions) Object.assign(region.opts, options);
+    // a partial `slips` changes only the kinds it names
+    const merge = (opts) => {
+      const slips = options.slips ? { ...opts.slips, ...options.slips } : opts.slips;
+      Object.assign(opts, options, { slips });
+    };
+    merge(this.options);
+    for (const region of this.regions) merge(region.opts);
     scheduler.kick();
     return this;
   }

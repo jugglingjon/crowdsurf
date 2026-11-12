@@ -237,6 +237,16 @@ html[data-mode="off"] .dock { display: none; }
 .dock-option input[type="range"] { flex: 1; min-width: 0; accent-color: #8f7bff; }
 .dock-option output, #slips, #dallies, #once-note { font-size: 12px; color: #9aa0ab; font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
 .dock-option.is-off { opacity: 0.45; }
+.dock { max-height: calc(100vh - 32px); overflow-y: auto; }
+.dock .dock-mix { margin: 8px 0 2px; padding: 0; border: 0; }
+.dock-mix summary { font-size: 13px; color: #d9dbe0; cursor: pointer; }
+.dock-mix.is-off { opacity: 0.45; }
+.dock-mix summary button { float: right; font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 6px; border: 1px solid #454a56; background: #23262d; color: #d9dbe0; cursor: pointer; }
+.mix-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 30px 22px; align-items: center; gap: 8px; margin-top: 7px; font-size: 12px; color: #d9dbe0; }
+.mix-row input { width: 100%; min-width: 0; accent-color: #8f7bff; }
+.mix-row output { color: #9aa0ab; text-align: right; font-variant-numeric: tabular-nums; }
+.mix-row b { font-weight: 400; color: #9aa0ab; text-align: right; font-variant-numeric: tabular-nums; }
+.mix-row.is-zero label { text-decoration: line-through; color: #9aa0ab; }
 .dock .dock-more { margin-top: 12px; border-top: 1px solid #343842; border-bottom: 0; padding: 10px 0 0; }
 .dock-more summary { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #9aa0ab; cursor: pointer; }
 .dock-buttons { display: grid; grid-template-columns: repeat(4, auto); gap: 6px; margin-top: 12px; }

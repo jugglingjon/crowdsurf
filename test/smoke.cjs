@@ -341,6 +341,42 @@ async function cleanShot(page, file) {
   check('mistakes: can be changed while running', (await page.evaluate(() => window.demoCrowdsurf.regions[0].opts.mistakes)) === 0.5);
   await page.context().close();
 
+  // ------------------------------------------------------------- slip mix
+  const countsAfter = async (setup) => {
+    const pg = await open('?mode=regions&mistakes=1');
+    await pg.evaluate(setup);
+    await scrollThrough(pg, 200, 900);
+    await waitComplete(pg, 60000);
+    const out = await pg.evaluate(() => {
+      const counts = {};
+      for (const r of window.demoCrowdsurf.regions) for (const [k, n] of Object.entries(r.slipCounts)) counts[k] = (counts[k] || 0) + n;
+      return { counts, weights: window.demoCrowdsurf.regions[0].opts.slips };
+    });
+    out.clean = (await residue(pg)) === 0;
+    await pg.context().close();
+    return out;
+  };
+  const KINDS = ['oversize', 'misplace', 'overshoot', 'nudge', 'retype', 'place', 'size', 'round'];
+  const allOff = Object.fromEntries(KINDS.map((k) => [k, 0]));
+
+  let mix = await countsAfter(() => {});
+  check('slip mix: every weight defaults to 1', KINDS.every((k) => mix.weights[k] === 1), JSON.stringify(mix.weights));
+  // the rarer kinds can miss a single run by chance, so ask for most of them, not all
+  check('slip mix: by default the kinds of slip all turn up', KINDS.filter((k) => mix.counts[k] > 0).length >= 6, JSON.stringify(mix.counts));
+
+  mix = await countsAfter(() => window.demoCrowdsurf.set({ slips: { oversize: 0, misplace: 0, overshoot: 0, nudge: 0, place: 0, size: 0, round: 0 } }));
+  check('slip mix: with only retype left on, nothing else happens', mix.counts.retype > 10 && Object.keys(mix.counts).length === 1 && mix.clean, JSON.stringify(mix.counts));
+
+  mix = await countsAfter(() => window.demoCrowdsurf.set({ slips: { retype: 0, round: 3 } }));
+  check('slip mix: a kind set to 0 never happens, and a partial change keeps the rest', !mix.counts.retype && mix.counts.round > 0 && mix.counts.oversize > 0 && mix.weights.place === 1, JSON.stringify(mix.counts));
+
+  page = await open('?mode=regions&mistakes=1');
+  await page.evaluate((off) => window.demoCrowdsurf.set({ slips: off }), allOff);
+  await scrollThrough(page, 400, 200);
+  await waitComplete(page, 40000);
+  check('slip mix: with every kind at 0 there are no slips', (await page.evaluate(() => window.demoCrowdsurf.regions.reduce((n, r) => n + r.slips, 0))) === 0);
+  await page.context().close();
+
   // ------------------------------------- natural movement, dilly-dallying
   page = await open('?mode=regions&natural=1&dally=1');
   await page.evaluate(() => {
@@ -483,7 +519,7 @@ async function cleanShot(page, file) {
     await page.waitForTimeout(300);
     const api = await page.evaluate(() => ({
       fn: typeof window.crowdsurf,
-      helpers: typeof window.crowdsurf.forget === 'function' && typeof window.crowdsurf.activeAgents === 'function' && window.crowdsurf.defaults.agents === 5,
+      helpers: typeof window.crowdsurf.forget === 'function' && typeof window.crowdsurf.activeAgents === 'function' && window.crowdsurf.defaults.agents === 5 && window.crowdsurf.slipKinds.length === 8,
       total: window.crowdsurf.instance.progress.total,
       fromAttributes: window.crowdsurf.instance.regions[0].opts.mistakes === 0.2 && window.crowdsurf.instance.regions[0].opts.naturalMovement === true,
       hidden: getComputedStyle(document.querySelector('.card h3')).opacity === '0',
@@ -497,7 +533,7 @@ async function cleanShot(page, file) {
       const m = await import('../dist/crowdsurf.js');
       return { names: Object.keys(m).sort().join(','), same: m.default === m.crowdsurf };
     });
-    check('module build: exports crowdsurf, forget, activeAgents and DEFAULTS', esm.names === 'DEFAULTS,activeAgents,crowdsurf,default,forget' && esm.same, esm.names);
+    check('module build: exports crowdsurf, forget, activeAgents, DEFAULTS and SLIP_KINDS', esm.names === 'DEFAULTS,SLIP_KINDS,activeAgents,crowdsurf,default,forget' && esm.same, esm.names);
     await context.close();
   }
 

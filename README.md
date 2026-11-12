@@ -5,8 +5,7 @@ Point it at a section, or at the whole page, and its elements wait hidden until 
 view, then get built in order.
 
 **Status: early release.** On npm as [`crowdsurf`](https://www.npmjs.com/package/crowdsurf). Its
-checks pass in Chromium, Firefox and WebKit. Still planned: ruler guides, flocking cursors and
-sound.
+checks pass in Chromium, Firefox and WebKit.
 
 **Demo:** https://jugglingjon.github.io/crowdsurf/
 
@@ -54,6 +53,7 @@ const s = crowdsurf('#features', {
   speed: 1,               // build speed multiplier
   agents: 5,              // cursors working at once
   mistakes: 0.2,          // share of pieces built imperfectly, then corrected
+  slips: { retype: 0 },   // which kinds of slip: 0 turns one off, 2 doubles it
   naturalMovement: true,  // hand-like curved cursor paths
   dillyDally: true,       // cursors sometimes loiter or read between jobs
   once: 'session',        // skip what a visitor has already seen

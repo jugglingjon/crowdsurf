@@ -46,6 +46,15 @@ crowdsurf('[data-crowdsurf]', {
 });
 ```
 
+## Choose which mistakes happen
+
+```js
+crowdsurf('#features', {
+  mistakes: 0.25,
+  slips: { retype: 0, overshoot: 0, round: 3 }, // no retyping or long lines, plenty of corner rounding
+});
+```
+
 ## Your own crew
 
 ```js
