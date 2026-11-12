@@ -5,8 +5,8 @@ Point it at a section, or at the whole page, and its elements wait hidden until 
 view, then get built in order.
 
 **Status: pre-release.** The library is complete enough to use and its checks pass in Chromium,
-Firefox and WebKit, but it is not on npm yet and has no license yet. Still planned: ruler guides,
-flocking cursors and sound.
+Firefox and WebKit, but it is not on npm yet. Still planned: ruler guides, flocking cursors and
+sound.
 
 **Demo:** https://jugglingjon.github.io/crowdsurf/
 
@@ -146,3 +146,7 @@ Inspired by [Swarm](https://califa.github.io/swarm-site/) by [Joel Califa](https
 site that builds itself as you scroll, and by [Swarm Rebuild](https://github.com/DhvanilPatel/swarm-cursors)
 by Dhvanil Patel, a Chrome extension that points the same idea at any page. This library is written
 from scratch and shares no code or assets with either.
+
+## License
+
+[MIT](LICENSE)

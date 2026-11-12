@@ -14,7 +14,7 @@ const esbuild = require('esbuild');
 const root = path.resolve(__dirname, '..');
 const dist = path.join(root, 'dist');
 const pkg = require(path.join(root, 'package.json'));
-const banner = { js: `/*! Crowdsurf ${pkg.version} | ${pkg.homepage} */` };
+const banner = { js: `/*! Crowdsurf ${pkg.version} | ${pkg.license} License | ${pkg.homepage} */` };
 
 const shared = { bundle: true, target: 'es2022', logLevel: 'warning', banner, absWorkingDir: root };
 

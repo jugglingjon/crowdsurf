@@ -9,6 +9,7 @@
     "url": "git+https://github.com/jugglingjon/crowdsurf.git"
   },
   "bugs": "https://github.com/jugglingjon/crowdsurf/issues",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/crowdsurf.js",
   "module": "./dist/crowdsurf.js",
