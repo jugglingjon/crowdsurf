@@ -26,9 +26,9 @@ body {
 }
 
 /* whole-page mode: keep the first paint blank until the script has planned the page */
-html[data-mode="page"] body:not([data-swarm-ready]) { visibility: hidden; }
+html[data-mode="page"] body:not([data-crowdsurf-ready]) { visibility: hidden; }
 /* "off" mode never runs the script, so undo the pre-hide */
-html[data-mode="off"] [data-swarm] { visibility: visible; animation: none; }
+html[data-mode="off"] [data-crowdsurf] { visibility: visible; animation: none; }
 
 h1, h2, h3, p, ul, dl, dd, figure { margin: 0; }
 h1, h2, h3 { line-height: 1.12; letter-spacing: -0.02em; text-wrap: balance; }

@@ -1,9 +1,9 @@
-// swarm-web: build part or all of a page in front of the reader as they scroll.
+// Crowdsurf: build part or all of a page in front of the reader as they scroll.
 //
-//   import { swarm } from 'swarm-web';
-//   swarm('#features');          // one region
-//   swarm(document.body);        // the whole page
-//   swarm();                     // every [data-swarm] element
+//   import { crowdsurf } from 'crowdsurf';
+//   crowdsurf('#features');          // one region
+//   crowdsurf(document.body);        // the whole page
+//   crowdsurf();                     // every [data-crowdsurf] element
 
 import { Region, markReady } from './region.js';
 import { scheduler } from './scheduler.js';
@@ -16,7 +16,7 @@ export const DEFAULTS = {
   naturalMovement: false, // cursors travel in hand-like curves, sometimes overshooting a little
   dillyDally: false, // between jobs a cursor sometimes loiters, or reads along a line of text
   rootMargin: '0px', // IntersectionObserver margin: when an element counts as on screen
-  ignore: '[data-swarm-ignore]', // elements (and their contents) the swarm leaves alone
+  ignore: '[data-crowdsurf-ignore]', // elements (and their contents) the crew leaves alone
   names: null, // cursor names, e.g. ['Ada', 'Grace']; defaults to a built-in list
   colors: null, // cursor colors as 6-digit hex, e.g. ['#6247ea']; defaults to a built-in palette
   once: false, // skip regions a visitor has already seen built: 'session', true (always), or a number of days
@@ -25,7 +25,7 @@ export const DEFAULTS = {
   respectReducedMotion: true, // do nothing for visitors who prefer reduced motion
 };
 
-// regions currently attached to the page, across every swarm() call
+// regions currently attached to the page, across every crowdsurf() call
 const live = new Set();
 
 function resolve(target) {
@@ -37,7 +37,7 @@ function resolve(target) {
   return [...new Set(list)];
 }
 
-const ONCE = 'swarm-web:once:';
+const ONCE = 'crowdsurf:once:';
 
 function storeFor(once) {
   return once === 'session' ? window.sessionStorage : window.localStorage;
@@ -80,24 +80,24 @@ export function forget() {
 function dataOptions(el) {
   const out = {};
   for (const key of ['speed', 'agents', 'maxAgents', 'mistakes']) {
-    const attr = 'data-swarm-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+    const attr = 'data-crowdsurf-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
     const n = parseFloat(el.getAttribute(attr));
     if (n > 0) out[key] = n;
   }
   // on/off options: present (or "true") turns them on, "false" turns them off
   for (const key of ['naturalMovement', 'dillyDally', 'watch']) {
-    const attr = 'data-swarm-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+    const attr = 'data-crowdsurf-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
     if (el.hasAttribute(attr)) out[key] = el.getAttribute(attr) !== 'false';
   }
-  // data-swarm-once, ="session", or ="7" (days)
-  if (el.hasAttribute('data-swarm-once')) {
-    const v = el.getAttribute('data-swarm-once');
+  // data-crowdsurf-once, ="session", or ="7" (days)
+  if (el.hasAttribute('data-crowdsurf-once')) {
+    const v = el.getAttribute('data-crowdsurf-once');
     out.once = v === 'session' ? 'session' : parseFloat(v) > 0 ? parseFloat(v) : v !== 'false';
   }
   return out;
 }
 
-class Swarm {
+class Crowdsurf {
   #listeners = new Map();
   #target;
   #skipped = []; // [element, index] of targets not built because of `once`
@@ -141,7 +141,7 @@ class Swarm {
     const clash = [...live].some((r) => r.el === el || r.el.contains(el) || el.contains(r.el));
     if (clash) {
       if (![...live].some((r) => r.el.contains(el))) {
-        console.warn('swarm-web: skipped a target that overlaps one already running', el);
+        console.warn('crowdsurf: skipped a target that overlaps one already running', el);
       }
       return;
     }
@@ -153,7 +153,7 @@ class Swarm {
       region.init();
     } catch (err) {
       // never leave a page hidden because of a planning error
-      console.error('swarm-web: could not set up a region, showing it as is', err);
+      console.error('crowdsurf: could not set up a region, showing it as is', err);
       region.destroy();
       live.delete(region);
       this.regions.pop();
@@ -168,12 +168,12 @@ class Swarm {
       if (region.opts.once) remember(region.onceKey, region.opts.once);
     }
     const detail = { type, region, element: region.el, done: region.done, total: region.total };
-    // Deferred, so listeners added right after swarm() still hear events from setup.
+    // Deferred, so listeners added right after crowdsurf() still hear events from setup.
     queueMicrotask(() => {
       if (this.destroyed) return;
       for (const fn of this.#listeners.get(type) || []) fn(detail);
       if (type !== 'progress') {
-        region.el.dispatchEvent(new CustomEvent('swarm:' + type, { bubbles: true, detail }));
+        region.el.dispatchEvent(new CustomEvent('crowdsurf:' + type, { bubbles: true, detail }));
       }
     });
   }
@@ -248,11 +248,11 @@ class Swarm {
 }
 
 /**
- * @param {string | Element | Iterable<Element>} [target='[data-swarm]']
+ * @param {string | Element | Iterable<Element>} [target='[data-crowdsurf]']
  * @param {Partial<typeof DEFAULTS>} [options]
  */
-export function swarm(target = '[data-swarm]', options = {}) {
-  return new Swarm(target, options);
+export function crowdsurf(target = '[data-crowdsurf]', options = {}) {
+  return new Crowdsurf(target, options);
 }
 
 /** How many agents are working right now, across every region. */
@@ -260,4 +260,4 @@ export function activeAgents() {
   return scheduler.busy;
 }
 
-export default swarm;
+export default crowdsurf;

@@ -1,4 +1,4 @@
-// Planner: walks a target element and decides which elements the swarm will build.
+// Planner: walks a target element and decides which elements the crew will build.
 //
 // Nothing is cloned. Every task points at a real element, which is hidden until its
 // turn and then revealed in place. There are four kinds of task:
@@ -132,7 +132,7 @@ function hasDirectText(el) {
  * @param {{ ignore?: string, parent?: object, firstId?: number }} [options]
  * @returns {Array<object>} tasks in document order
  */
-export function plan(root, { ignore = '[data-swarm-ignore]', parent: under = null, firstId = 0 } = {}) {
+export function plan(root, { ignore = '[data-crowdsurf-ignore]', parent: under = null, firstId = 0 } = {}) {
   const view = root.ownerDocument.defaultView;
   const tasks = [];
   const styleCache = new Map();

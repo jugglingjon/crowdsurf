@@ -5,7 +5,7 @@
 // transparent, and the range shrinks as typing advances. No wrapper elements, no
 // layout change: the text occupies its final position from the first character.
 
-const NAME = 'swarm-web-pending';
+const NAME = 'crowdsurf-pending';
 let highlight = null;
 
 export function canType() {

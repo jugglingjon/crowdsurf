@@ -34,13 +34,13 @@ function check(name, ok, extra = '') {
 
 const opacityOf = (page, sel) => page.$eval(sel, (el) => getComputedStyle(el).opacity);
 const visibilityOf = (page, sel) => page.$eval(sel, (el) => getComputedStyle(el).visibility);
-const progress = (page) => page.evaluate(() => ({ ...window.demoSwarm.progress, complete: window.demoSwarm.complete }));
+const progress = (page) => page.evaluate(() => ({ ...window.demoCrowdsurf.progress, complete: window.demoCrowdsurf.complete }));
 // inline visibility/opacity left behind on anything outside the demo's own controls
 const residue = (page) =>
   page.evaluate(
     () =>
       [...document.querySelectorAll('[style]')].filter(
-        (el) => !el.closest('[data-swarm-ignore], [data-swarm-layer]') && (el.style.visibility || el.style.opacity),
+        (el) => !el.closest('[data-crowdsurf-ignore], [data-crowdsurf-layer]') && (el.style.visibility || el.style.opacity),
       ).length,
   );
 
@@ -53,13 +53,13 @@ async function scrollThrough(page, step = 300, pause = 250) {
 }
 
 async function waitComplete(page, timeout = 20000) {
-  await page.waitForFunction(() => window.demoSwarm.complete, null, { timeout });
+  await page.waitForFunction(() => window.demoCrowdsurf.complete, null, { timeout });
 }
 
 const layer = (page) =>
   page.evaluate(() => {
-    const host = document.querySelector('[data-swarm-layer]');
-    const hl = window.CSS && CSS.highlights ? CSS.highlights.get('swarm-web-pending') : null;
+    const host = document.querySelector('[data-crowdsurf-layer]');
+    const hl = window.CSS && CSS.highlights ? CSS.highlights.get('crowdsurf-pending') : null;
     return {
       agents: host ? host.shadowRoot.querySelectorAll('.agent').length : 0,
       outlines: host ? host.shadowRoot.querySelectorAll('.rect').length : 0,
@@ -74,7 +74,7 @@ const layer = (page) =>
 
 async function cleanShot(page, file) {
   // the cursors pack up and leave shortly after the work runs out
-  await page.waitForFunction(() => !document.querySelector('[data-swarm-layer]'), null, { timeout: 8000 });
+  await page.waitForFunction(() => !document.querySelector('[data-crowdsurf-layer]'), null, { timeout: 8000 });
   await page.evaluate(() => {
     document.querySelectorAll('.dock, .plan-overlay').forEach((el) => (el.style.display = 'none'));
     document.documentElement.setAttribute('data-mode', 'off'); // same mode switch highlight as the baseline
@@ -120,7 +120,7 @@ async function cleanShot(page, file) {
   check('regions: tasks were planned and none built yet', p.total > 80 && p.done === 0, `(${p.done}/${p.total})`);
   const kinds = await page.evaluate(() => {
     const k = { box: 0, text: 0, media: 0, line: 0, copies: 0, images: 0, penned: 0 };
-    for (const r of window.demoSwarm.regions) {
+    for (const r of window.demoCrowdsurf.regions) {
       for (const t of r.tasks) {
         k[t.kind]++;
         if (t.copyOf) k.copies++;
@@ -134,7 +134,7 @@ async function cleanShot(page, file) {
   check('planner: repeated siblings are marked as copies', kinds.copies >= 20);
   check('planner: images and bordered cells are told apart', kinds.images === 7 && kinds.penned > 10);
   const cards = await page.evaluate(() => {
-    const tasks = window.demoSwarm.regions[0].tasks.filter((t) => t.el.classList.contains('card'));
+    const tasks = window.demoCrowdsurf.regions[0].tasks.filter((t) => t.el.classList.contains('card'));
     return { n: tasks.length, masters: tasks.filter((t) => !t.copyOf).length, quick: tasks[1].children.filter((c) => c.kind === 'text').every((c) => c.quick) };
   });
   check('planner: one card is the original, five are copies', cards.n === 6 && cards.masters === 1 && cards.quick);
@@ -142,7 +142,7 @@ async function cleanShot(page, file) {
   // children never appear before their parent
   await page.evaluate(() => {
     window.orderViolations = 0;
-    window.demoSwarm.on('progress', ({ region }) => {
+    window.demoCrowdsurf.on('progress', ({ region }) => {
       for (const t of region.tasks) if (t.state !== 'wait' && t.parent && t.parent.state !== 'done') window.orderViolations++;
     });
   });
@@ -157,7 +157,7 @@ async function cleanShot(page, file) {
   // (content scrolled past unseen is finished outright, which is fine)
   await page.evaluate(() => {
     window.copyViolations = 0;
-    window.demoSwarm.on('progress', ({ region }) => {
+    window.demoCrowdsurf.on('progress', ({ region }) => {
       for (const t of region.tasks) if (t.copyOf && t.state === 'build' && t.copyOf.left > 0) window.copyViolations++;
     });
   });
@@ -213,16 +213,16 @@ async function cleanShot(page, file) {
   await waitComplete(page);
   // replay from the top: regions that are above the viewport would be finished at once
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-  await page.evaluate(() => window.demoSwarm.replay());
+  await page.evaluate(() => window.demoCrowdsurf.replay());
   await page.waitForTimeout(50);
   p = await progress(page);
   check('replay: everything is hidden again', p.done < p.total && !p.complete, `(${p.done}/${p.total})`);
-  await page.evaluate(() => window.demoSwarm.finish());
+  await page.evaluate(() => window.demoCrowdsurf.finish());
   p = await progress(page);
   check('finish: builds the rest instantly', p.done === p.total && p.complete && (await residue(page)) === 0);
   check('finish: no text is left hidden mid-typing', (await layer(page)).hiddenText === 0);
-  await page.evaluate(() => window.demoSwarm.replay());
-  await page.evaluate(() => window.demoSwarm.destroy());
+  await page.evaluate(() => window.demoCrowdsurf.replay());
+  await page.evaluate(() => window.demoCrowdsurf.destroy());
   check('destroy: puts every element back', (await residue(page)) === 0 && (await opacityOf(page, '#features .card h3')) === '1');
   await page.context().close();
 
@@ -250,7 +250,7 @@ async function cleanShot(page, file) {
   page = await open('?mode=regions');
   await scrollThrough(page, 500, 150);
   await waitComplete(page);
-  const noSlips = await page.evaluate(() => window.demoSwarm.regions.reduce((n, r) => n + r.slips, 0));
+  const noSlips = await page.evaluate(() => window.demoCrowdsurf.regions.reduce((n, r) => n + r.slips, 0));
   check('mistakes: off means no slips at all', noSlips === 0, `(${noSlips})`);
   await page.context().close();
 
@@ -271,13 +271,13 @@ async function cleanShot(page, file) {
     setInterval(() => {
       const root = document.documentElement;
       window.late.overflow = Math.max(window.late.overflow, root.scrollWidth - root.clientWidth);
-      const host = document.querySelector('[data-swarm-layer]');
+      const host = document.querySelector('[data-crowdsurf-layer]');
       if (host) {
         if (host.shadowRoot.querySelector('.dot')) window.late.dots++;
         // the closed hand is the only cursor drawn in a 24px box
         if (host.shadowRoot.querySelector('.agent svg[width="24"]')) window.late.hands++;
       }
-      for (const r of window.demoSwarm.regions) {
+      for (const r of window.demoCrowdsurf.regions) {
         for (const t of r.tasks) {
           if (!t.shift) continue;
           if (!seen.has(t)) {
@@ -314,7 +314,7 @@ async function cleanShot(page, file) {
   // slowly, so pieces are built on screen and not finished outright by being scrolled past
   await scrollThrough(page, 150, 1500);
   await waitComplete(page, 60000);
-  const slipCount = await page.evaluate(() => window.demoSwarm.regions.reduce((n, r) => n + r.slips, 0));
+  const slipCount = await page.evaluate(() => window.demoCrowdsurf.regions.reduce((n, r) => n + r.slips, 0));
   check('mistakes: at 100% most pieces slip', slipCount > 50, `(${slipCount} slips over ${(await progress(page)).total} tasks)`);
   check('mistakes: nothing left behind', (await residue(page)) === 0 && (await layer(page)).hiddenText === 0);
   await page.evaluate(() => {
@@ -333,12 +333,12 @@ async function cleanShot(page, file) {
   check('late slip: a container is moved only after its contents are built', late.withContent > 0);
   check('late slip: never widens the page', late.overflow <= 0, `(overflow ${late.overflow}px)`);
   const leftover = await page.evaluate(() =>
-    window.demoSwarm.regions.reduce((n, r) => n + r.tasks.filter((t) => t.shift || t.el.getAnimations().length).length + r.chores.size, 0),
+    window.demoCrowdsurf.regions.reduce((n, r) => n + r.tasks.filter((t) => t.shift || t.el.getAnimations().length).length + r.chores.size, 0),
   );
   check('late slip: no offsets or animations left on any element', leftover === 0, `(${leftover})`);
   check('mistakes: finished page is still pixel-identical to the plain page', baseline.equals(await cleanShot(page, 'mistakes-final.png')));
-  await page.evaluate(() => window.demoSwarm.set({ mistakes: 0.5 }));
-  check('mistakes: can be changed while running', (await page.evaluate(() => window.demoSwarm.regions[0].opts.mistakes)) === 0.5);
+  await page.evaluate(() => window.demoCrowdsurf.set({ mistakes: 0.5 }));
+  check('mistakes: can be changed while running', (await page.evaluate(() => window.demoCrowdsurf.regions[0].opts.mistakes)) === 0.5);
   await page.context().close();
 
   // ------------------------------------- natural movement, dilly-dallying
@@ -346,15 +346,15 @@ async function cleanShot(page, file) {
   await page.evaluate(() => {
     window.sawDallying = 0;
     setInterval(() => {
-      const host = document.querySelector('[data-swarm-layer]');
+      const host = document.querySelector('[data-crowdsurf-layer]');
       if (host) window.sawDallying = Math.max(window.sawDallying, host.shadowRoot.querySelectorAll('.agent').length);
     }, 50);
   });
   await scrollThrough(page, 200, 700);
   await waitComplete(page, 60000);
   const extras = await page.evaluate(() => ({
-    dallies: window.demoSwarm.regions.reduce((n, r) => n + r.dallies, 0),
-    natural: window.demoSwarm.regions.every((r) => r.opts.naturalMovement === true),
+    dallies: window.demoCrowdsurf.regions.reduce((n, r) => n + r.dallies, 0),
+    natural: window.demoCrowdsurf.regions.every((r) => r.opts.naturalMovement === true),
     agents: window.sawDallying,
   }));
   check('dilly-dally: cursors dawdle between jobs', extras.dallies > 5, JSON.stringify(extras));
@@ -366,7 +366,7 @@ async function cleanShot(page, file) {
   page = await open('?mode=regions');
   await scrollThrough(page, 500, 150);
   await waitComplete(page);
-  check('dilly-dally: off means no dawdling', (await page.evaluate(() => window.demoSwarm.regions.reduce((n, r) => n + r.dallies, 0))) === 0);
+  check('dilly-dally: off means no dawdling', (await page.evaluate(() => window.demoCrowdsurf.regions.reduce((n, r) => n + r.dallies, 0))) === 0);
   await page.context().close();
 
   // ----------------------------------------------- no custom highlight API
@@ -391,14 +391,14 @@ async function cleanShot(page, file) {
   await page.waitForLoadState('load');
   await page.waitForTimeout(300);
   const again = await page.evaluate(() => ({
-    total: window.demoSwarm.progress.total,
-    skipped: window.demoSwarm.skipped,
+    total: window.demoCrowdsurf.progress.total,
+    skipped: window.demoCrowdsurf.skipped,
     shown: getComputedStyle(document.querySelector('#features .card h3')).opacity === '1' && getComputedStyle(document.querySelector('#pricing')).visibility === 'visible',
   }));
   check('once: a second visit in the same session shows the finished page', again.total === 0 && again.skipped === 3 && again.shown, JSON.stringify(again));
   // (a reload keeps the scroll position, and regions above the viewport would be finished outright)
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-  await page.evaluate(() => window.demoSwarm.replay());
+  await page.evaluate(() => window.demoCrowdsurf.replay());
   await page.waitForTimeout(100);
   p = await progress(page);
   check('once: replay() builds it again anyway', p.total > 80 && p.done < p.total, `(${p.done}/${p.total})`);
@@ -426,7 +426,7 @@ async function cleanShot(page, file) {
   const stateOf = (pg, sel) =>
     pg.evaluate((s) => {
       const el = document.querySelector(s);
-      const task = window.demoSwarm.regions[0].tasks.find((t) => t.el === el || el.contains(t.el));
+      const task = window.demoCrowdsurf.regions[0].tasks.find((t) => t.el === el || el.contains(t.el));
       return task ? task.state : 'none';
     }, sel);
 
@@ -453,7 +453,7 @@ async function cleanShot(page, file) {
   await page.waitForTimeout(60);
   const grown = await page.evaluate(() => {
     const row = document.querySelector('.rows .row:last-child');
-    return { total: window.demoSwarm.progress.total, complete: window.demoSwarm.complete, hidden: getComputedStyle(row.querySelector('span')).opacity === '0' || getComputedStyle(row).opacity === '0' };
+    return { total: window.demoCrowdsurf.progress.total, complete: window.demoCrowdsurf.complete, hidden: getComputedStyle(row.querySelector('span')).opacity === '0' || getComputedStyle(row).opacity === '0' };
   });
   check('watch: rows added later are hidden and planned', grown.total > before && !grown.complete && grown.hidden, JSON.stringify({ before, ...grown }));
   await waitComplete(page, 20000);
@@ -475,7 +475,7 @@ async function cleanShot(page, file) {
   await scrollThrough(page, 400, 150);
   await waitComplete(page);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  await page.waitForFunction(() => !document.querySelector('[data-swarm-layer]'), null, { timeout: 8000 });
+  await page.waitForFunction(() => !document.querySelector('[data-crowdsurf-layer]'), null, { timeout: 8000 });
   check('cursors: layer is removed once the crew has left', true);
   check('mobile: completes with no sideways scroll', overflow <= 0, `(overflow ${overflow}px)`);
   await page.context().close();

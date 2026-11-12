@@ -1,4 +1,4 @@
-import { swarm, activeAgents, forget } from '../src/index.js';
+import { crowdsurf, activeAgents, forget } from '../src/index.js';
 
 const mode = document.documentElement.getAttribute('data-mode');
 const $ = (id) => document.getElementById(id);
@@ -15,7 +15,7 @@ if (mode !== 'off') {
   // Build once per session: remembered between reloads by the checkbox, or forced with ?once=session.
   const remembered = (() => {
     try {
-      return sessionStorage.getItem('swarm-demo-once') === '1';
+      return sessionStorage.getItem('crowdsurf-demo-once') === '1';
     } catch (_) {
       return false;
     }
@@ -24,8 +24,8 @@ if (mode !== 'off') {
   const options = { mistakes: imperfect ? often : 0, naturalMovement: natural, dillyDally: dally, once: once ? 'session' : false };
 
   // respectReducedMotion is left on: with "reduce motion" set in your OS, nothing builds.
-  const instance = mode === 'page' ? swarm(document.body, options) : swarm('[data-swarm]', options);
-  window.demoSwarm = instance; // handy in the console
+  const instance = mode === 'page' ? crowdsurf(document.body, options) : crowdsurf('[data-crowdsurf]', options);
+  window.demoCrowdsurf = instance; // handy in the console
 
   // ------------------------------------------------------------ live stats
 
@@ -95,7 +95,7 @@ if (mode !== 'off') {
   $('once').checked = once;
   $('once').addEventListener('change', (e) => {
     try {
-      sessionStorage.setItem('swarm-demo-once', e.target.checked ? '1' : '0');
+      sessionStorage.setItem('crowdsurf-demo-once', e.target.checked ? '1' : '0');
     } catch (_) {
       /* storage blocked */
     }
@@ -124,7 +124,7 @@ if (mode !== 'off') {
     if (overlay) overlay.remove();
     overlay = document.createElement('div');
     overlay.className = 'plan-overlay';
-    overlay.setAttribute('data-swarm-ignore', '');
+    overlay.setAttribute('data-crowdsurf-ignore', '');
     overlay.setAttribute('aria-hidden', 'true');
     const frag = document.createDocumentFragment();
     for (const region of instance.regions) {

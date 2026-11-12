@@ -36,9 +36,9 @@ function findScroller(el, cache) {
 }
 
 export function markReady(el) {
-  el.setAttribute('data-swarm-ready', '');
+  el.setAttribute('data-crowdsurf-ready', '');
   // targets nested inside this one are absorbed by it
-  for (const inner of el.querySelectorAll('[data-swarm]')) inner.setAttribute('data-swarm-ready', '');
+  for (const inner of el.querySelectorAll('[data-crowdsurf]')) inner.setAttribute('data-crowdsurf-ready', '');
 }
 
 export class Region {
@@ -270,7 +270,7 @@ export class Region {
     try {
       result = await perform(agent, task, ctx);
     } catch (err) {
-      console.error('swarm-web: a build step failed, showing the element as is', err);
+      console.error('crowdsurf: a build step failed, showing the element as is', err);
     } finally {
       this.building--;
       if (!maybeDally(agent, this)) agent.release();
@@ -293,7 +293,7 @@ export class Region {
         natural: () => !!this.opts.naturalMovement,
       });
     } catch (err) {
-      console.error('swarm-web: could not move a piece back, putting it in place', err);
+      console.error('crowdsurf: could not move a piece back, putting it in place', err);
     } finally {
       if (!maybeDally(agent, this)) agent.release();
       if (epoch === this.epoch) this.dropChore(chore);

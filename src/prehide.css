@@ -7,19 +7,19 @@
  * The animation is a safety net: if the script never runs, the content shows itself
  * after 4 seconds.
  */
-[data-swarm]:not([data-swarm-ready]) {
+[data-crowdsurf]:not([data-crowdsurf-ready]) {
   visibility: hidden;
-  animation: swarm-prehide-failsafe 0s linear 4s forwards;
+  animation: crowdsurf-prehide-failsafe 0s linear 4s forwards;
 }
 
-@keyframes swarm-prehide-failsafe {
+@keyframes crowdsurf-prehide-failsafe {
   to {
     visibility: visible;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-swarm]:not([data-swarm-ready]) {
+  [data-crowdsurf]:not([data-crowdsurf-ready]) {
     visibility: visible;
     animation: none;
   }

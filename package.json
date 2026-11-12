@@ -1,5 +1,5 @@
 {
-  "name": "swarm-web",
+  "name": "crowdsurf",
   "version": "0.1.0",
   "description": "Build part or all of a web page in front of the reader as they scroll.",
   "type": "module",

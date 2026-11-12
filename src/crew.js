@@ -215,7 +215,7 @@ export class Crew {
   mount() {
     if (this.host) return;
     const host = document.createElement('div');
-    host.setAttribute('data-swarm-layer', '');
+    host.setAttribute('data-crowdsurf-layer', '');
     host.setAttribute('aria-hidden', 'true');
     host.style.cssText =
       'all:initial!important;position:fixed!important;inset:0!important;display:block!important;' +

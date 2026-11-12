@@ -1,4 +1,4 @@
-# swarm-web
+# Crowdsurf
 
 A JavaScript library that builds part or all of a web page in front of the reader as they scroll.
 Point it at a section, or at the whole page, and its elements wait hidden until they scroll into
@@ -14,18 +14,18 @@ builds and a release, then guides and sound.
 ## Use
 
 ```html
-<section data-swarm> ... </section>
+<section data-crowdsurf> ... </section>
 
 <script type="module">
-  import { swarm } from './src/index.js';
+  import { crowdsurf } from './src/index.js';
 
-  swarm();                  // every [data-swarm] element
-  // swarm('#pricing');     // one region
-  // swarm(document.body);  // the whole page
+  crowdsurf();                  // every [data-crowdsurf] element
+  // crowdsurf('#pricing');     // one region
+  // crowdsurf(document.body);  // the whole page
 </script>
 ```
 
-Or load `src/auto.js` as a module script to build every `[data-swarm]` element with no code.
+Or load `src/auto.js` as a module script to build every `[data-crowdsurf]` element with no code.
 
 For targets that are on screen when the page loads, add [`src/prehide.css`](src/prehide.css) in the
 `<head>` so they are not painted before the script runs. Targets further down do not need it.
@@ -33,7 +33,7 @@ For targets that are on screen when the page loads, add [`src/prehide.css`](src/
 ### Options
 
 ```js
-const s = swarm('#features', {
+const s = crowdsurf('#features', {
   agents: 5,                      // agents working at once
   maxAgents: 12,                  // ceiling when a backlog builds up (fast scrolling)
   speed: 1,                       // build speed multiplier
@@ -41,7 +41,7 @@ const s = swarm('#features', {
   naturalMovement: false,         // hand-like curved cursor paths
   dillyDally: false,              // cursors sometimes loiter or read between jobs
   rootMargin: '0px',              // when an element counts as on screen
-  ignore: '[data-swarm-ignore]',  // elements the swarm leaves alone
+  ignore: '[data-crowdsurf-ignore]',  // elements the crew leaves alone
   once: false,                    // skip what a visitor has already seen: 'session', true, or days
   watch: false,                   // also build elements added to the region later
   names: ['Ada', 'Grace'],        // cursor names (defaults to a built-in list)
@@ -50,8 +50,8 @@ const s = swarm('#features', {
 });
 ```
 
-`data-swarm-speed`, `data-swarm-agents`, `data-swarm-max-agents`, `data-swarm-mistakes`,
-`data-swarm-natural-movement`, `data-swarm-dilly-dally`, `data-swarm-once` and `data-swarm-watch` on
+`data-crowdsurf-speed`, `data-crowdsurf-agents`, `data-crowdsurf-max-agents`, `data-crowdsurf-mistakes`,
+`data-crowdsurf-natural-movement`, `data-crowdsurf-dilly-dally`, `data-crowdsurf-once` and `data-crowdsurf-watch` on
 a target override these for that region.
 
 ### Once only
@@ -130,11 +130,11 @@ size slip is skipped for images and table cells.
 | `forget()` | Exported function: clear what `once` has remembered |
 | `s.destroy()` | Stop and put every element back as it was |
 
-Regions also dispatch `swarm:start` and `swarm:complete` DOM events.
+Regions also dispatch `crowdsurf:start` and `crowdsurf:complete` DOM events.
 
 ## How it works
 
-Nothing is cloned or screenshotted. The swarm hides the page's real elements and reveals them in place.
+Nothing is cloned or screenshotted. Crowdsurf hides the page's real elements and reveals them in place.
 
 1. **Plan** ([`src/planner.js`](src/planner.js)). Walk the target and sort elements into four kinds
    of task: **box** (a container with a background, full border or shadow of its own), **line** (an

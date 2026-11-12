@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>swarm-web: scrolling panel test</title>
+<title>Crowdsurf: scrolling panel test</title>
 <link rel="stylesheet" href="../src/prehide.css">
 <link rel="stylesheet" href="demo.css">
 <style>
@@ -50,7 +50,7 @@
   </aside>
 
   <main class="panel" id="panel">
-    <div class="panel-inner" data-swarm data-swarm-watch>
+    <div class="panel-inner" data-crowdsurf data-crowdsurf-watch>
       <p class="eyebrow">Phase 4 test page</p>
       <h2>Building inside a scrolling panel</h2>
       <p>Rows further down this panel wait until the panel is scrolled to them, not until the page is.</p>
@@ -98,7 +98,7 @@
   </main>
 </div>
 
-<aside class="dock" data-swarm-ignore aria-label="Build progress">
+<aside class="dock" data-crowdsurf-ignore aria-label="Build progress">
   <div class="dock-row">
     <strong class="dock-title">Build</strong>
     <span class="dock-count" id="count">–</span>
@@ -111,12 +111,12 @@
 </aside>
 
 <script type="module">
-  import { swarm } from '../src/index.js';
+  import { crowdsurf } from '../src/index.js';
 
   const $ = (id) => document.getElementById(id);
-  // the target carries data-swarm-watch, so rows added later are built too
-  const instance = swarm('[data-swarm]', { mistakes: 0 });
-  window.demoSwarm = instance;
+  // the target carries data-crowdsurf-watch, so rows added later are built too
+  const instance = crowdsurf('[data-crowdsurf]', { mistakes: 0 });
+  window.demoCrowdsurf = instance;
 
   function render() {
     const { done, total } = instance.progress;
