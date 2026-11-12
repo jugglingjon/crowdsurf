@@ -1,4 +1,4 @@
-import { swarm, activeAgents } from '../src/index.js';
+import { swarm, activeAgents, forget } from '../src/index.js';
 
 const mode = document.documentElement.getAttribute('data-mode');
 const $ = (id) => document.getElementById(id);
@@ -12,7 +12,16 @@ if (mode !== 'off') {
   const query = new URLSearchParams(location.search);
   let natural = query.get('natural') !== '0';
   let dally = query.get('dally') !== '0';
-  const options = { mistakes: imperfect ? often : 0, naturalMovement: natural, dillyDally: dally };
+  // Build once per session: remembered between reloads by the checkbox, or forced with ?once=session.
+  const remembered = (() => {
+    try {
+      return sessionStorage.getItem('swarm-demo-once') === '1';
+    } catch (_) {
+      return false;
+    }
+  })();
+  const once = query.get('once') === 'session' || (query.get('once') === null && remembered);
+  const options = { mistakes: imperfect ? often : 0, naturalMovement: natural, dillyDally: dally, once: once ? 'session' : false };
 
   // respectReducedMotion is left on: with "reduce motion" set in your OS, nothing builds.
   const instance = mode === 'page' ? swarm(document.body, options) : swarm('[data-swarm]', options);
@@ -25,7 +34,7 @@ if (mode !== 'off') {
 
   function render() {
     const { done, total } = instance.progress;
-    $('count').textContent = total ? `${done} / ${total} built` : 'nothing to build';
+    $('count').textContent = total ? `${done} / ${total} built` : instance.skipped ? 'already built this session' : 'nothing to build';
     $('meter').style.width = total ? `${(done / total) * 100}%` : '0';
     const n = activeAgents();
     $('agents').textContent = `${n} agent${n === 1 ? '' : 's'} working`;
@@ -83,6 +92,17 @@ if (mode !== 'off') {
   syncImperfect();
 
   if (innerWidth < 860) $('more').open = false; // keep the dock small on phones
+  $('once').checked = once;
+  $('once').addEventListener('change', (e) => {
+    try {
+      sessionStorage.setItem('swarm-demo-once', e.target.checked ? '1' : '0');
+    } catch (_) {
+      /* storage blocked */
+    }
+    instance.set({ once: e.target.checked ? 'session' : false });
+    if (!e.target.checked) forget();
+    $('once-note').textContent = e.target.checked ? 'from next reload' : '';
+  });
   $('natural').checked = natural;
   $('dally').checked = dally;
   $('natural').addEventListener('change', (e) => {

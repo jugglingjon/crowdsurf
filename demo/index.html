@@ -33,7 +33,7 @@
 
 <main>
   <section class="hero">
-    <p class="eyebrow">Phase 3 preview</p>
+    <p class="eyebrow">Phase 4 preview</p>
     <h1>A page that gets built while you scroll it.</h1>
     <p class="lede">
       Elements wait hidden until they scroll into view. Then a small crew of cursors builds them: boxes and
@@ -54,7 +54,7 @@
         <span>The plain page, for comparison</span>
       </a>
     </div>
-    <p class="hint">Scroll down <span aria-hidden="true">↓</span></p>
+    <p class="hint">Scroll down <span aria-hidden="true">↓</span> &nbsp;·&nbsp; <a href="shell.html">Scrolling panel test page</a></p>
   </section>
 
   <section id="features" class="section" data-swarm>
@@ -199,14 +199,14 @@
         <tbody>
           <tr><td>1</td><td>Planner, scheduler, scroll-triggered regions</td><td><span class="pill">Done</span></td></tr>
           <tr><td>2</td><td>Cursor layer, box drawing and typing</td><td><span class="pill">Done</span></td></tr>
-          <tr><td>3</td><td>Media, lines and duplicated siblings</td><td><span class="pill pill-on">This demo</span></td></tr>
-          <tr><td>4</td><td>Once-only option, teardown, polish</td><td><span class="pill">Next</span></td></tr>
+          <tr><td>3</td><td>Media, lines and duplicated siblings</td><td><span class="pill">Done</span></td></tr>
+          <tr><td>4</td><td>Once-only option, scrolling panels, late content</td><td><span class="pill pill-on">This demo</span></td></tr>
         </tbody>
       </table>
     </div>
 
     <form class="signup" action="#" onsubmit="return false">
-      <label for="email">Get notified when phase 4 lands</label>
+      <label for="email">Get notified when phase 5 lands</label>
       <div class="signup-row">
         <input id="email" type="email" placeholder="you@example.com" autocomplete="off">
         <select aria-label="How often">
@@ -280,6 +280,10 @@
   <div class="dock-option">
     <label><input type="checkbox" id="dally"> Dilly-dallying</label>
     <span id="dallies"></span>
+  </div>
+  <div class="dock-option">
+    <label><input type="checkbox" id="once"> Build once per session</label>
+    <span id="once-note"></span>
   </div>
   </details>
   <div class="legend" id="legend" hidden>

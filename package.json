@@ -14,5 +14,8 @@
     "serve": "python3 -m http.server 4173",
     "test": "node test/smoke.cjs"
   },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  },
   "private": true
 }

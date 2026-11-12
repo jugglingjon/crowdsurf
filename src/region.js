@@ -13,6 +13,28 @@ function settle(task) {
   show(task);
 }
 
+// How long something may sit level with the screen without being visible before it
+// is taken to be clipped or off to one side, and simply shown.
+const GRACE = 400;
+
+// The nearest ancestor that scrolls its contents up and down, or null for the page.
+function findScroller(el, cache) {
+  const start = el.parentElement;
+  if (!start) return null;
+  if (cache.has(start)) return cache.get(start);
+  let found = null;
+  const root = el.ownerDocument.documentElement;
+  for (let p = start; p && p !== root && p !== el.ownerDocument.body; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && p.scrollHeight > p.clientHeight + 1) {
+      found = p;
+      break;
+    }
+  }
+  cache.set(start, found);
+  return found;
+}
+
 export function markReady(el) {
   el.setAttribute('data-swarm-ready', '');
   // targets nested inside this one are absorbed by it
@@ -38,6 +60,9 @@ export class Region {
     this.completed = false;
     this.destroyed = false;
     this.io = null;
+    this.mo = null;
+    this.scrollers = new Map(); // parent element -> its scrolling ancestor
+    this.recheck = 0;
     this.onFocus = (e) => this.revealNow(e.target);
   }
 
@@ -58,14 +83,85 @@ export class Region {
     this.el.addEventListener('focusin', this.onFocus);
     this.arm();
     this.scheduler.add(this);
+    if (this.opts.watch && typeof MutationObserver === 'function') {
+      // runs before the next paint, so added content is hidden before it is seen
+      this.mo = new MutationObserver((records) => this.adopt(records));
+      this.mo.observe(this.el, { childList: true, subtree: true });
+    }
     if (!this.tasks.length) this.finishUp();
+  }
+
+  watchTasks() {
+    if (!this.io) this.io = new IntersectionObserver((entries) => this.observe(entries), { rootMargin: this.opts.rootMargin });
+    return this.io;
+  }
+
+  // Take on elements added to the region after it was planned (the `watch` option).
+  adopt(records) {
+    if (this.destroyed) return;
+    const added = new Set();
+    for (const record of records) {
+      for (const node of record.addedNodes) if (node.nodeType === 1 && node.isConnected && this.el.contains(node)) added.add(node);
+    }
+    let grew = false;
+    for (const el of added) {
+      if (this.byEl.has(el)) continue;
+      // find what it sits in: skip it if that is being adopted too, is ignored, or is
+      // a single piece (text, media) that the new element is simply part of
+      let parent = null;
+      let skip = !!(this.opts.ignore && el.closest(this.opts.ignore));
+      for (let p = el.parentElement; p && !skip; p = p.parentElement) {
+        if (added.has(p)) skip = true;
+        const task = this.byEl.get(p);
+        if (task && !parent) {
+          if (task.leaf) skip = true;
+          parent = task;
+        }
+        if (p === this.el) break;
+      }
+      if (skip) continue;
+      const fresh = plan(el, { ...this.opts, parent, firstId: this.tasks.length });
+      for (const task of fresh) {
+        task.region = this;
+        this.byEl.set(task.el, task);
+        hide(task);
+        this.tasks.push(task);
+        for (let t = task; t; t = t.parent) t.left++;
+        if (!task.parent || task.parent.state === 'done') this.ready.add(task);
+        this.watchTasks().observe(task.el);
+        grew = true;
+      }
+    }
+    if (!grew) return;
+    if (this.completed) {
+      // the region had finished: open it up again for the new arrivals
+      this.completed = false;
+      this.started = false;
+      this.el.addEventListener('focusin', this.onFocus);
+      this.scheduler.add(this);
+    }
+    this.emit('progress', this);
+    this.scheduler.kick();
+  }
+
+  // The part of the screen a task can be seen in: the viewport, cut down to its
+  // scrolling container if it has one. Null when that container is itself off screen.
+  visibleBox(task) {
+    if (task.scroller === undefined) task.scroller = findScroller(task.el, this.scrollers);
+    const box = { top: 0, bottom: window.innerHeight, passed: false };
+    if (!task.scroller) return box;
+    const s = task.scroller.getBoundingClientRect();
+    if (s.bottom <= 0) return { ...box, passed: true };
+    if (s.top >= window.innerHeight) return null;
+    return { top: Math.max(0, s.top), bottom: Math.min(window.innerHeight, s.bottom), passed: false };
   }
 
   // (Re)start watching every unbuilt task.
   arm() {
     if (this.io) this.io.disconnect();
+    this.io = null;
     this.ready.clear();
-    this.io = new IntersectionObserver((entries) => this.observe(entries), { rootMargin: this.opts.rootMargin });
+    this.watchTasks();
     // children come after parents in `tasks`, so walking backwards totals each subtree
     for (let i = this.tasks.length - 1; i >= 0; i--) {
       const task = this.tasks[i];
@@ -93,20 +189,53 @@ export class Region {
   }
 
   // Called by the scheduler. Pushes tasks that are ready to build onto `queue`, and
-  // finishes outright any that are already above the viewport.
+  // finishes outright any that nobody will see being built.
   collect(queue) {
     if (this.completed || this.destroyed) return;
+    const now = performance.now();
+    let unsure = false;
     // completing a task adds its children to `ready`; a Set visits those too
     for (const task of this.ready) {
       if (task.state !== 'wait') continue;
+      // removed from the page since it was planned
+      if (!task.el.isConnected) {
+        this.complete(task);
+        continue;
+      }
       if (task.inView) {
+        task.offSince = 0;
         // a copy waits until the one it is copied from is completely built
         // (and, if it was built out of place or the wrong size, put right)
         if (!task.copyOf || (task.copyOf.left === 0 && !task.copyOf.shift)) queue.push(task);
+        continue;
       }
+      // Not on screen. The observer only reports changes, so work out why by measuring.
+      const box = this.visibleBox(task);
+      if (!box) continue; // its scrolling container has not come on screen yet
+      const r = task.el.getBoundingClientRect();
       // Scrolled past without being seen (anchor jumps, flings): no need to animate.
-      // The observer only reports changes, so this has to be measured.
-      else if (task.el.getBoundingClientRect().bottom <= 0) this.complete(task);
+      if (box.passed || r.bottom <= box.top) {
+        this.complete(task);
+        continue;
+      }
+      // Further down: it will be built when it is scrolled to.
+      if (r.top >= box.bottom) {
+        task.offSince = 0;
+        continue;
+      }
+      // Level with what is on screen, yet not visible: clipped by something, or off to
+      // one side (a carousel slide, an off-canvas menu). Scrolling down will never
+      // bring it into view, so after a moment (the observer may just be a frame
+      // behind) show it as it is.
+      if (!task.offSince) task.offSince = now;
+      if (now - task.offSince > GRACE) this.complete(task);
+      else unsure = true;
+    }
+    if (unsure && !this.recheck) {
+      this.recheck = setTimeout(() => {
+        this.recheck = 0;
+        this.scheduler.kick();
+      }, GRACE + 60);
     }
     // A container built out of place is moved once everything inside it is built.
     for (const chore of this.chores) {
@@ -220,6 +349,7 @@ export class Region {
     this.io = null;
     this.el.removeEventListener('focusin', this.onFocus);
     this.scheduler.remove(this);
+    // (the mutation observer stays: with `watch`, later additions reopen the region)
     this.emit('complete', this);
   }
 
@@ -249,6 +379,7 @@ export class Region {
     this.epoch++;
     for (const task of this.tasks) {
       settle(task);
+      task.offSince = 0;
       task.state = 'wait';
       task.inView = false;
       hide(task);
@@ -278,6 +409,9 @@ export class Region {
     this.clearChores();
     if (this.io) this.io.disconnect();
     this.io = null;
+    if (this.mo) this.mo.disconnect();
+    this.mo = null;
+    clearTimeout(this.recheck);
     this.ready.clear();
     this.el.removeEventListener('focusin', this.onFocus);
     this.scheduler.remove(this);

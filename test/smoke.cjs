@@ -5,7 +5,10 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const playwright = require('playwright');
+
+// BROWSER=firefox or BROWSER=webkit runs the same checks in another engine.
+const ENGINE = process.env.BROWSER || 'chromium';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(__dirname, 'out');
@@ -56,7 +59,7 @@ async function waitComplete(page, timeout = 20000) {
 const layer = (page) =>
   page.evaluate(() => {
     const host = document.querySelector('[data-swarm-layer]');
-    const hl = CSS.highlights.get('swarm-web-pending');
+    const hl = window.CSS && CSS.highlights ? CSS.highlights.get('swarm-web-pending') : null;
     return {
       agents: host ? host.shadowRoot.querySelectorAll('.agent').length : 0,
       outlines: host ? host.shadowRoot.querySelectorAll('.rect').length : 0,
@@ -85,15 +88,17 @@ async function cleanShot(page, file) {
   fs.mkdirSync(OUT, { recursive: true });
   const server = await serve();
   const base = `http://127.0.0.1:${server.address().port}/demo/`;
-  const browser = await chromium.launch();
+  const browser = await playwright[ENGINE].launch();
+  console.log(`engine: ${ENGINE} ${browser.version()}\n`);
   const errors = [];
-  const open = async (query, contextOptions = {}) => {
+  const open = async (query, contextOptions = {}, before = null) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, ...contextOptions });
     const page = await context.newPage();
+    if (before) await page.addInitScript(before);
     page.on('pageerror', (e) => errors.push(`${query}: ${e.message}`));
     page.on('console', (m) => m.type() === 'error' && errors.push(`${query}: ${m.text()}`));
     // the demo turns its extras on by default; tests opt in to each explicitly
-    const defaults = ['mistakes', 'natural', 'dally'].filter((k) => !query.includes(k + '=')).map((k) => `&${k}=0`).join('');
+    const defaults = ['mistakes', 'natural', 'dally', 'once'].filter((k) => !query.includes(k + '=')).map((k) => `&${k}=0`).join('');
     await page.goto(base + query + defaults);
     await page.waitForLoadState('load');
     return page;
@@ -361,6 +366,104 @@ async function cleanShot(page, file) {
   await scrollThrough(page, 500, 150);
   await waitComplete(page);
   check('dilly-dally: off means no dawdling', (await page.evaluate(() => window.demoSwarm.regions.reduce((n, r) => n + r.dallies, 0))) === 0);
+  await page.context().close();
+
+  // ----------------------------------------------- no custom highlight API
+  // Older browsers cannot type text in place: it is drawn as a box and faded in.
+  page = await open('?mode=regions', {}, () => {
+    delete window.Highlight;
+  });
+  check('fallback: the highlight API really is missing', await page.evaluate(() => typeof window.Highlight === 'undefined'));
+  await scrollThrough(page, 300, 300);
+  await waitComplete(page, 40000);
+  check('fallback: builds to completion and leaves nothing behind', (await residue(page)) === 0);
+  check('fallback: finished page is pixel-identical to the plain page', baseline.equals(await cleanShot(page, 'fallback-final.png')));
+  await page.context().close();
+
+  // ------------------------------------------------------------ once only
+  page = await open('?mode=regions&once=session');
+  await scrollThrough(page, 500, 150);
+  await waitComplete(page);
+  p = await progress(page);
+  check('once: the first visit builds as usual', p.total > 80 && p.done === p.total);
+  await page.reload();
+  await page.waitForLoadState('load');
+  await page.waitForTimeout(300);
+  const again = await page.evaluate(() => ({
+    total: window.demoSwarm.progress.total,
+    skipped: window.demoSwarm.skipped,
+    shown: getComputedStyle(document.querySelector('#features .card h3')).opacity === '1' && getComputedStyle(document.querySelector('#pricing')).visibility === 'visible',
+  }));
+  check('once: a second visit in the same session shows the finished page', again.total === 0 && again.skipped === 3 && again.shown, JSON.stringify(again));
+  // (a reload keeps the scroll position, and regions above the viewport would be finished outright)
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await page.evaluate(() => window.demoSwarm.replay());
+  await page.waitForTimeout(100);
+  p = await progress(page);
+  check('once: replay() builds it again anyway', p.total > 80 && p.done < p.total, `(${p.done}/${p.total})`);
+  await page.context().close();
+
+  // --------------------------------------- an element removed before its turn
+  page = await open('?mode=regions');
+  await page.waitForTimeout(200);
+  await page.evaluate(() => document.querySelector('#pricing .signup').remove());
+  await scrollThrough(page, 500, 150);
+  await waitComplete(page);
+  check('removed content: the region still completes', true);
+  await page.context().close();
+
+  // ---------------------------------- inside a panel that scrolls on its own
+  const shell = async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    const pg = await context.newPage();
+    pg.on('pageerror', (e) => errors.push(`shell: ${e.message}`));
+    pg.on('console', (m) => m.type() === 'error' && errors.push(`shell: ${m.text()}`));
+    await pg.goto(base + 'shell.html');
+    await pg.waitForLoadState('load');
+    return pg;
+  };
+  const stateOf = (pg, sel) =>
+    pg.evaluate((s) => {
+      const el = document.querySelector(s);
+      const task = window.demoSwarm.regions[0].tasks.find((t) => t.el === el || el.contains(t.el));
+      return task ? task.state : 'none';
+    }, sel);
+
+  page = await shell();
+  await page.waitForTimeout(2500);
+  check('panel: the page itself does not scroll', await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight));
+  check('panel: the first screen of the panel is built', (await stateOf(page, '.rows .row:nth-child(1)')) !== 'none' && (await progress(page)).done > 8);
+  check('panel: rows further down the panel wait to be scrolled to', (await stateOf(page, '.rows .row:nth-child(16)')) === 'wait');
+  check('clipped: carousel slides off to the side are shown without waiting', (await stateOf(page, '.slide:nth-child(3)')) === 'done');
+  check('clipped: content folded to nothing is shown without waiting', (await stateOf(page, '#folded p')) === 'done');
+  const panelHeight = await page.evaluate(() => document.querySelector('#panel').scrollHeight);
+  for (let y = 0; y <= panelHeight; y += 250) {
+    await page.evaluate((top) => document.querySelector('#panel').scrollTo({ top, behavior: 'instant' }), y);
+    await page.waitForTimeout(350);
+  }
+  await waitComplete(page, 30000);
+  check('panel: completes once the panel has been scrolled through', (await residue(page)) === 0);
+  const before = (await progress(page)).total;
+  await page.evaluate(() => document.querySelector('#panel').scrollTo({ top: 1e6, behavior: 'instant' }));
+  await page.click('#more');
+  await page.waitForTimeout(60);
+  const grown = await page.evaluate(() => {
+    const row = document.querySelector('.rows .row:last-child');
+    return { total: window.demoSwarm.progress.total, complete: window.demoSwarm.complete, hidden: getComputedStyle(row.querySelector('span')).opacity === '0' || getComputedStyle(row).opacity === '0' };
+  });
+  check('watch: rows added later are hidden and planned', grown.total > before && !grown.complete && grown.hidden, JSON.stringify({ before, ...grown }));
+  await waitComplete(page, 20000);
+  check('watch: the added rows are built and the region completes again', (await residue(page)) === 0 && (await stateOf(page, '.rows .row:last-child')) === 'done');
+  await page.context().close();
+
+  page = await shell();
+  await page.waitForTimeout(200);
+  await page.evaluate(() => document.querySelector('#panel').scrollTo({ top: 1e6, behavior: 'instant' }));
+  // the list itself has to be drawn first; the rows scrolled past inside it are then finished outright
+  await page.waitForTimeout(4500);
+  p = await progress(page);
+  check('panel: jumping to the end finishes what was skipped inside the panel', (await stateOf(page, '.rows .row:nth-child(3)')) === 'done' && p.done > p.total * 0.6, `(${p.done}/${p.total})`);
+  await waitComplete(page, 20000);
   await page.context().close();
 
   // -------------------------------------------------------------- mobile

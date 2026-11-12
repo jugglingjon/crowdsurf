@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>swarm-web: scrolling panel test</title>
+<link rel="stylesheet" href="../src/prehide.css">
+<link rel="stylesheet" href="demo.css">
+<style>
+  /* An app shell: the page itself never scrolls, the panel does. */
+  html, body { height: 100%; overflow: hidden; }
+  .shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); height: 100%; }
+  .side { padding: 24px 20px; background: var(--band); color: #f2f1ec; }
+  .side h1 { font-size: 18px; margin-bottom: 18px; }
+  .side a { display: block; padding: 6px 0; color: #b9bcc4; text-decoration: none; font-size: 15px; }
+  .side p { margin-top: 18px; font-size: 13px; color: #9aa0ab; }
+  .panel { overflow-y: auto; height: 100%; }
+  .panel-inner { max-width: 760px; padding: 40px 32px 160px; }
+  .panel h2 { font-size: 34px; }
+  .panel h3 { font-size: 20px; margin: 44px 0 14px; }
+  .panel-inner > p { margin-top: 12px; color: var(--muted); font-size: 17px; }
+
+  /* A carousel that hides its other slides off to the right. */
+  .carousel { overflow: hidden; border-radius: var(--radius); }
+  .track { display: flex; gap: 16px; width: max-content; }
+  .slide { width: 696px; padding: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+  .slide strong { display: block; font-size: 20px; }
+  .slide span { color: var(--muted); }
+
+  /* Content clipped to nothing until its panel is opened. */
+  .folded { max-height: 0; overflow: hidden; }
+  .folded.is-open { max-height: none; }
+  .folded p { padding: 14px 0; color: var(--muted); }
+
+  .rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+  .row { display: flex; justify-content: space-between; gap: 16px; padding: 16px 20px; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row em { font-style: normal; color: var(--muted); }
+  .actions { display: flex; gap: 10px; margin-top: 18px; }
+  .dock { width: 250px; }
+  @media (max-width: 860px) { .shell { grid-template-columns: minmax(0, 1fr); } .side { display: none; } .slide { width: 80vw; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <h1>Scrolling panel</h1>
+    <a href="./">Back to the main demo</a>
+    <p>The page does not scroll here. Only the panel on the right does, and the build follows it.</p>
+  </aside>
+
+  <main class="panel" id="panel">
+    <div class="panel-inner" data-swarm data-swarm-watch>
+      <p class="eyebrow">Phase 4 test page</p>
+      <h2>Building inside a scrolling panel</h2>
+      <p>Rows further down this panel wait until the panel is scrolled to them, not until the page is.</p>
+
+      <h3>A carousel</h3>
+      <div class="carousel">
+        <div class="track">
+          <div class="slide"><strong>Slide one</strong><span>This one is on screen, so it is built.</span></div>
+          <div class="slide"><strong>Slide two</strong><span>Off to the right. It is shown without being built.</span></div>
+          <div class="slide"><strong>Slide three</strong><span>Also off to the right.</span></div>
+        </div>
+      </div>
+
+      <h3>A folded section</h3>
+      <div class="folded" id="folded">
+        <p>This text is clipped to nothing until the section is opened, so nobody would see it being built.</p>
+      </div>
+      <div class="actions">
+        <button class="btn" type="button" id="unfold">Open the folded section</button>
+      </div>
+
+      <h3>A long list</h3>
+      <ul class="rows" id="rows">
+        <li class="row"><span>Row 1</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 2</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 3</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 4</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 5</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 6</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 7</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 8</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 9</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 10</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 11</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 12</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 13</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 14</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 15</span><em>waiting to be built</em></li>
+        <li class="row"><span>Row 16</span><em>waiting to be built</em></li>
+      </ul>
+      <div class="actions">
+        <button class="btn btn-solid" type="button" id="more">Add three rows</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<aside class="dock" data-swarm-ignore aria-label="Build progress">
+  <div class="dock-row">
+    <strong class="dock-title">Build</strong>
+    <span class="dock-count" id="count">–</span>
+  </div>
+  <div class="meter"><div class="meter-fill" id="meter"></div></div>
+  <div class="dock-buttons">
+    <button type="button" id="replay">Replay</button>
+    <button type="button" id="finish">Finish</button>
+  </div>
+</aside>
+
+<script type="module">
+  import { swarm } from '../src/index.js';
+
+  const $ = (id) => document.getElementById(id);
+  // the target carries data-swarm-watch, so rows added later are built too
+  const instance = swarm('[data-swarm]', { mistakes: 0 });
+  window.demoSwarm = instance;
+
+  function render() {
+    const { done, total } = instance.progress;
+    $('count').textContent = `${done} / ${total} built`;
+    $('meter').style.width = total ? `${(done / total) * 100}%` : '0';
+  }
+  instance.on('progress', render).on('complete', render);
+  render();
+
+  $('replay').addEventListener('click', () => instance.replay());
+  $('finish').addEventListener('click', () => instance.finish());
+  $('unfold').addEventListener('click', () => $('folded').classList.toggle('is-open'));
+
+  let next = $('rows').children.length;
+  $('more').addEventListener('click', () => {
+    for (let i = 0; i < 3; i++) {
+      const li = document.createElement('li');
+      li.className = 'row';
+      li.innerHTML = `<span>Row ${++next}</span><em>added after the page loaded</em>`;
+      $('rows').appendChild(li);
+    }
+  });
+</script>
+</body>
+</html>

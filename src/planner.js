@@ -129,10 +129,10 @@ function hasDirectText(el) {
 
 /**
  * @param {Element} root  the targeted element
- * @param {{ ignore?: string }} [options]
+ * @param {{ ignore?: string, parent?: object, firstId?: number }} [options]
  * @returns {Array<object>} tasks in document order
  */
-export function plan(root, { ignore = '[data-swarm-ignore]' } = {}) {
+export function plan(root, { ignore = '[data-swarm-ignore]', parent: under = null, firstId = 0 } = {}) {
   const view = root.ownerDocument.defaultView;
   const tasks = [];
   const styleCache = new Map();
@@ -192,7 +192,7 @@ export function plan(root, { ignore = '[data-swarm-ignore]' } = {}) {
 
   function add(kind, el, parent, extra) {
     const task = {
-      id: tasks.length,
+      id: firstId + tasks.length,
       kind,
       el,
       parent,
@@ -280,7 +280,8 @@ export function plan(root, { ignore = '[data-swarm-ignore]' } = {}) {
     const body = root.localName === 'html' ? root.ownerDocument.body : root;
     if (body) for (const c of body.children) walk(c, null);
   } else {
-    walk(root, null);
+    // `under` is set when planning content added to a region that is already running
+    walk(root, under);
   }
 
   groupCopies(tasks);

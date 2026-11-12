@@ -4,10 +4,10 @@ A JavaScript library that builds part or all of a web page in front of the reade
 Point it at a section, or at the whole page, and its elements wait hidden until they scroll into
 view, then get built in order.
 
-**Status: phase 3 of 6.** A crew of named cursors builds the page: boxes are dragged out with a
+**Status: phase 4 of 6.** A crew of named cursors builds the page: boxes are dragged out with a
 live size readout, images sweep in over a placeholder, lines are drawn with the pen, repeated
-pieces are duplicated from a finished one, and text is typed into place. Still to come: a
-once-only option and polish, packaged builds, then guides and sound.
+pieces are duplicated from a finished one, and text is typed into place. Still to come: packaged
+builds and a release, then guides and sound.
 
 **Demo:** https://jugglingjon.github.io/swarm-web/
 
@@ -42,6 +42,8 @@ const s = swarm('#features', {
   dillyDally: false,              // cursors sometimes loiter or read between jobs
   rootMargin: '0px',              // when an element counts as on screen
   ignore: '[data-swarm-ignore]',  // elements the swarm leaves alone
+  once: false,                    // skip what a visitor has already seen: 'session', true, or days
+  watch: false,                   // also build elements added to the region later
   names: ['Ada', 'Grace'],        // cursor names (defaults to a built-in list)
   colors: ['#6247ea', '#d93f4c'], // cursor colors, 6-digit hex (defaults to a built-in palette)
   respectReducedMotion: true,     // do nothing for visitors who prefer reduced motion
@@ -49,8 +51,33 @@ const s = swarm('#features', {
 ```
 
 `data-swarm-speed`, `data-swarm-agents`, `data-swarm-max-agents`, `data-swarm-mistakes`,
-`data-swarm-natural-movement` and `data-swarm-dilly-dally` on a target override these for that
-region.
+`data-swarm-natural-movement`, `data-swarm-dilly-dally`, `data-swarm-once` and `data-swarm-watch` on
+a target override these for that region.
+
+### Once only
+
+`once` stops returning visitors sitting through the build again. A region is remembered when it
+finishes building; next time it is left exactly as it is.
+
+- `once: 'session'` remembers until the tab is closed
+- `once: true` remembers for good
+- `once: 7` remembers for seven days
+
+Regions are remembered per page path and element id (or position among the targets). Set `onceKey`
+to share one memory across several pages. `replay()` builds a skipped region anyway, and the
+exported `forget()` clears everything remembered. If storage is blocked the region just builds.
+
+### Content added later
+
+With `watch: true`, elements added to a region after it was planned (a lazy-loaded list, a "load
+more" button) are hidden before they are painted and built like the rest. A region that had
+already finished reopens and fires `complete` again when the new arrivals are done. It is off by
+default because on a page that updates itself constantly, every update would be rebuilt.
+
+### Scrolling panels
+
+A target inside an element that scrolls on its own (an app shell, a sidebar, a modal) follows that
+element's scrolling: content further down the panel waits until the panel is scrolled to it.
 
 ### Natural cursor movement
 
@@ -98,7 +125,9 @@ size slip is skipped for images and table cells.
 | `s.progress` | `{ done, total }` across all regions |
 | `s.set({ speed: 2 })` | Change options while running |
 | `s.finish()` | Build everything that is left, instantly |
-| `s.replay()` | Hide everything and build again |
+| `s.replay()` | Hide everything and build again, including regions `once` had skipped |
+| `s.skipped` | How many targets `once` left alone |
+| `forget()` | Exported function: clear what `once` has remembered |
 | `s.destroy()` | Stop and put every element back as it was |
 
 Regions also dispatch `swarm:start` and `swarm:complete` DOM events.
@@ -139,11 +168,14 @@ No build step yet. Serve the repo root and open `/demo/`:
 npm run serve
 ```
 
-Browser checks (needs Playwright with Chromium):
+Browser checks (needs Playwright; `BROWSER=firefox` or `BROWSER=webkit` picks another engine):
 
 ```bash
 npm test
 ```
+
+The same checks run in Chromium, Firefox and WebKit on every push
+([`.github/workflows/test.yml`](.github/workflows/test.yml)).
 
 ## Known limits
 
@@ -158,7 +190,12 @@ npm test
 
 - Loose text sitting directly in a container next to block elements appears with the container.
 - Content that is hidden when the page loads (closed panels, inactive tabs) is left alone.
-- Elements that are visible at load but never come on screen keep a region from reporting `complete`.
+- Content that is level with the screen but cannot be seen (carousel slides off to the side, an
+  off-canvas menu, anything clipped to nothing) is shown as it is after a moment, not built.
+- Content further down a scrolling panel that is never scrolled to stays unbuilt, and keeps its
+  region from reporting `complete`.
+- Outlines and cursors are drawn over the whole viewport, so for a piece half-hidden by the edge of
+  a scrolling panel they can spill a little outside the panel.
 - Open shadow roots are treated as one piece of media, not built element by element.
 
 ## Credit

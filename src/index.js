@@ -19,6 +19,9 @@ export const DEFAULTS = {
   ignore: '[data-swarm-ignore]', // elements (and their contents) the swarm leaves alone
   names: null, // cursor names, e.g. ['Ada', 'Grace']; defaults to a built-in list
   colors: null, // cursor colors as 6-digit hex, e.g. ['#6247ea']; defaults to a built-in palette
+  once: false, // skip regions a visitor has already seen built: 'session', true (always), or a number of days
+  onceKey: '', // what `once` remembers a page by; defaults to its path
+  watch: false, // also build elements added to a region later (lazy lists, "load more")
   respectReducedMotion: true, // do nothing for visitors who prefer reduced motion
 };
 
@@ -34,6 +37,46 @@ function resolve(target) {
   return [...new Set(list)];
 }
 
+const ONCE = 'swarm-web:once:';
+
+function storeFor(once) {
+  return once === 'session' ? window.sessionStorage : window.localStorage;
+}
+
+// Has this visitor already watched the region behind `key` being built?
+function seen(key, once) {
+  try {
+    const at = Number(storeFor(once).getItem(key));
+    if (!at) return false;
+    return typeof once === 'number' ? Date.now() - at < once * 864e5 : true;
+  } catch (_) {
+    return false; // storage blocked: just build
+  }
+}
+
+function remember(key, once) {
+  try {
+    storeFor(once).setItem(key, String(Date.now()));
+  } catch (_) {
+    /* storage blocked: nothing to do */
+  }
+}
+
+/** Forget every region remembered by the `once` option, so they build again. */
+export function forget() {
+  for (const name of ['sessionStorage', 'localStorage']) {
+    try {
+      const store = window[name];
+      for (let i = store.length - 1; i >= 0; i--) {
+        const key = store.key(i);
+        if (key && key.startsWith(ONCE)) store.removeItem(key);
+      }
+    } catch (_) {
+      /* storage blocked */
+    }
+  }
+}
+
 function dataOptions(el) {
   const out = {};
   for (const key of ['speed', 'agents', 'maxAgents', 'mistakes']) {
@@ -42,9 +85,14 @@ function dataOptions(el) {
     if (n > 0) out[key] = n;
   }
   // on/off options: present (or "true") turns them on, "false" turns them off
-  for (const key of ['naturalMovement', 'dillyDally']) {
+  for (const key of ['naturalMovement', 'dillyDally', 'watch']) {
     const attr = 'data-swarm-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
     if (el.hasAttribute(attr)) out[key] = el.getAttribute(attr) !== 'false';
+  }
+  // data-swarm-once, ="session", or ="7" (days)
+  if (el.hasAttribute('data-swarm-once')) {
+    const v = el.getAttribute('data-swarm-once');
+    out.once = v === 'session' ? 'session' : parseFloat(v) > 0 ? parseFloat(v) : v !== 'false';
   }
   return out;
 }
@@ -52,6 +100,7 @@ function dataOptions(el) {
 class Swarm {
   #listeners = new Map();
   #target;
+  #skipped = []; // [element, index] of targets not built because of `once`
 
   constructor(target, options) {
     this.options = { ...DEFAULTS, ...options };
@@ -73,37 +122,51 @@ class Swarm {
       typeof matchMedia === 'function' &&
       matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    for (const el of els) {
-      if (reduced) {
-        markReady(el);
-        continue;
+    els.forEach((el, index) => {
+      if (reduced) markReady(el);
+      else this.#attach(el, index, false);
+    });
+  }
+
+  // Set up one target. `again` builds it even if `once` says it has been seen.
+  #attach(el, index, again) {
+    const opts = { ...this.options, ...dataOptions(el) };
+    const key = `${ONCE}${opts.onceKey || location.pathname}:${el.id || index}`;
+    if (opts.once && !again && seen(key, opts.once)) {
+      markReady(el);
+      this.#skipped.push([el, index]);
+      return;
+    }
+    // one region per element, and no region inside another
+    const clash = [...live].some((r) => r.el === el || r.el.contains(el) || el.contains(r.el));
+    if (clash) {
+      if (![...live].some((r) => r.el.contains(el))) {
+        console.warn('swarm-web: skipped a target that overlaps one already running', el);
       }
-      // one region per element, and no region inside another
-      const clash = [...live].some((r) => r.el === el || r.el.contains(el) || el.contains(r.el));
-      if (clash) {
-        if (![...live].some((r) => r.el.contains(el))) {
-          console.warn('swarm-web: skipped a target that overlaps one already running', el);
-        }
-        continue;
-      }
-      const region = new Region(el, { ...this.options, ...dataOptions(el) }, scheduler, (type, r) => this.#emit(type, r));
-      live.add(region);
-      this.regions.push(region);
-      try {
-        region.init();
-      } catch (err) {
-        // never leave a page hidden because of a planning error
-        console.error('swarm-web: could not set up a region, showing it as is', err);
-        region.destroy();
-        live.delete(region);
-        this.regions.pop();
-        markReady(el);
-      }
+      return;
+    }
+    const region = new Region(el, opts, scheduler, (type, r) => this.#emit(type, r));
+    region.onceKey = key;
+    live.add(region);
+    this.regions.push(region);
+    try {
+      region.init();
+    } catch (err) {
+      // never leave a page hidden because of a planning error
+      console.error('swarm-web: could not set up a region, showing it as is', err);
+      region.destroy();
+      live.delete(region);
+      this.regions.pop();
+      markReady(el);
     }
   }
 
   #emit(type, region) {
-    if (type === 'complete') live.delete(region);
+    if (type === 'start') live.add(region); // also when `watch` reopens a finished region
+    if (type === 'complete') {
+      live.delete(region);
+      if (region.opts.once) remember(region.onceKey, region.opts.once);
+    }
     const detail = { type, region, element: region.el, done: region.done, total: region.total };
     // Deferred, so listeners added right after swarm() still hear events from setup.
     queueMicrotask(() => {
@@ -151,19 +214,25 @@ class Swarm {
     return this.regions.every((r) => r.completed);
   }
 
+  /** How many targets were left as they are because of the `once` option. */
+  get skipped() {
+    return this.#skipped.length;
+  }
+
   /** Build everything that is left, instantly. */
   finish() {
     for (const region of this.regions) region.finish();
     return this;
   }
 
-  /** Hide everything again and rebuild. */
+  /** Hide everything again and rebuild, including anything `once` had skipped. */
   replay() {
     for (const region of this.regions) {
       if (region.destroyed) continue;
       live.add(region);
       region.replay();
     }
+    for (const [el, index] of this.#skipped.splice(0)) this.#attach(el, index, true);
     return this;
   }
 
