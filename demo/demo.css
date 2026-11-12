@@ -274,5 +274,7 @@ html[data-mode="off"] .dock { display: none; }
   .hero { padding: 56px 16px 48px; }
   .section { padding: 56px 16px; }
   .band { padding-left: 0; padding-right: 0; }
-  .dock { left: 16px; width: auto; }
+  /* the controls panel covers too much of a small screen: hidden there for now */
+  .dock { display: none; }
+  .site-footer { padding-bottom: 48px; }
 }
