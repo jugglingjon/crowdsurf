@@ -470,6 +470,37 @@ async function cleanShot(page, file) {
   await waitComplete(page, 20000);
   await page.context().close();
 
+  // ---------------------------------------------------------- built files
+  // needs `npm run build` first (npm test does that)
+  check('build: dist/ exists', fs.existsSync(path.join(ROOT, 'dist/crowdsurf.global.min.js')));
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    page = await context.newPage();
+    page.on('pageerror', (e) => errors.push(`bundle: ${e.message}`));
+    page.on('console', (m) => m.type() === 'error' && errors.push(`bundle: ${m.text()}`));
+    await page.goto(base + 'bundle.html');
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(300);
+    const api = await page.evaluate(() => ({
+      fn: typeof window.crowdsurf,
+      helpers: typeof window.crowdsurf.forget === 'function' && typeof window.crowdsurf.activeAgents === 'function' && window.crowdsurf.defaults.agents === 5,
+      total: window.crowdsurf.instance.progress.total,
+      fromAttributes: window.crowdsurf.instance.regions[0].opts.mistakes === 0.2 && window.crowdsurf.instance.regions[0].opts.naturalMovement === true,
+      hidden: getComputedStyle(document.querySelector('.card h3')).opacity === '0',
+    }));
+    check('script tag: defines the crowdsurf global and its helpers', api.fn === 'function' && api.helpers, JSON.stringify(api));
+    check('script tag: finds [data-crowdsurf] and reads options from attributes', api.total > 8 && api.fromAttributes && api.hidden);
+    await scrollThrough(page, 300, 300);
+    await page.waitForFunction(() => window.crowdsurf.instance.complete, null, { timeout: 30000 });
+    check('script tag: builds to completion and leaves nothing behind', (await residue(page)) === 0);
+    const esm = await page.evaluate(async () => {
+      const m = await import('../dist/crowdsurf.js');
+      return { names: Object.keys(m).sort().join(','), same: m.default === m.crowdsurf };
+    });
+    check('module build: exports crowdsurf, forget, activeAgents and DEFAULTS', esm.names === 'DEFAULTS,activeAgents,crowdsurf,default,forget' && esm.same, esm.names);
+    await context.close();
+  }
+
   // -------------------------------------------------------------- mobile
   page = await open('?mode=regions', { viewport: { width: 390, height: 800 } });
   await scrollThrough(page, 400, 150);

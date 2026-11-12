@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crowdsurf: script-tag build</title>
+<link rel="stylesheet" href="../dist/prehide.css">
+<link rel="stylesheet" href="demo.css">
+</head>
+<body>
+<main>
+  <section class="hero">
+    <p class="eyebrow">Built files</p>
+    <h1>The plain script-tag build.</h1>
+    <p class="lede">
+      This page loads <code>dist/crowdsurf.auto.min.js</code> with an ordinary <code>&lt;script&gt;</code> tag and
+      writes no JavaScript of its own. The section below carries <code>data-crowdsurf</code> and a few option attributes.
+    </p>
+    <p class="hint"><a href="./">Back to the main demo</a></p>
+  </section>
+
+  <section class="section" data-crowdsurf data-crowdsurf-mistakes="0.2" data-crowdsurf-natural-movement>
+    <div class="section-head">
+      <p class="eyebrow">One region</p>
+      <h2>No module, no build step, no code</h2>
+      <p>Everything here is configured from the markup.</p>
+    </div>
+    <div class="cards">
+      <article class="card"><h3>One file</h3><p>About 14 kB gzipped, with no dependencies.</p></article>
+      <article class="card"><h3>One attribute</h3><p>Mark a section and it builds when scrolled to.</p></article>
+      <article class="card"><h3>One global</h3><p>The function is there if you want to call it yourself.</p></article>
+    </div>
+    <pre class="code" style="margin-top:28px"><code>&lt;link rel="stylesheet" href="prehide.css"&gt;
+&lt;script src="crowdsurf.auto.min.js" defer&gt;&lt;/script&gt;
+
+&lt;section data-crowdsurf data-crowdsurf-mistakes="0.2"&gt; ... &lt;/section&gt;</code></pre>
+  </section>
+</main>
+<script src="../dist/crowdsurf.auto.min.js" defer></script>
+</body>
+</html>
