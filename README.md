@@ -4,8 +4,8 @@ A JavaScript library that builds part or all of a web page in front of the reade
 Point it at a section, or at the whole page, and its elements wait hidden until they scroll into
 view, then get built in order.
 
-**Status: pre-release.** The library is complete enough to use and its checks pass in Chromium,
-Firefox and WebKit, but it is not on npm yet. Still planned: ruler guides, flocking cursors and
+**Status: early release.** On npm as [`crowdsurf`](https://www.npmjs.com/package/crowdsurf). Its
+checks pass in Chromium, Firefox and WebKit. Still planned: ruler guides, flocking cursors and
 sound.
 
 **Demo:** https://jugglingjon.github.io/crowdsurf/
@@ -17,21 +17,24 @@ sound.
 No build step and no code. Mark what should be built with `data-crowdsurf`:
 
 ```html
-<link rel="stylesheet" href="prehide.css">
-<script src="crowdsurf.auto.min.js" defer></script>
+<link rel="stylesheet" href="https://unpkg.com/crowdsurf@0.1/dist/prehide.css">
+<script src="https://unpkg.com/crowdsurf@0.1/dist/crowdsurf.auto.min.js" defer></script>
 
 <section data-crowdsurf> ... </section>
 ```
 
-Until the package is published, take the two files from the demo site:
-[`crowdsurf.auto.min.js`](https://jugglingjon.github.io/crowdsurf/dist/crowdsurf.auto.min.js) and
-[`prehide.css`](https://jugglingjon.github.io/crowdsurf/dist/prehide.css). To call it yourself
-instead, use `crowdsurf.global.min.js`, which defines `window.crowdsurf` and nothing more.
+To call it yourself instead, load `dist/crowdsurf.global.min.js`, which defines `window.crowdsurf`
+and nothing more. The same files are on [jsDelivr](https://cdn.jsdelivr.net/npm/crowdsurf@0.1/dist/)
+and on the demo site, or copy them out of the package and serve them yourself.
 
 `prehide.css` keeps targets that are on screen at page load from being painted before the script
 runs. Targets further down the page do not need it.
 
 ### As a module
+
+```bash
+npm install crowdsurf
+```
 
 ```js
 import { crowdsurf } from 'crowdsurf';
