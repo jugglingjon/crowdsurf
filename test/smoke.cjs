@@ -255,7 +255,7 @@ async function cleanShot(page, file) {
   await page.screenshot({ path: path.join(OUT, 'mistakes-mid-build.png') });
   // watch for pieces built out of place, and make sure they never widen the page
   await page.evaluate(() => {
-    window.late = { leaves: 0, containers: 0, withContent: 0, overflow: 0, moved: 0, resized: 0, bigger: 0, rewrapped: 0 };
+    window.late = { leaves: 0, containers: 0, withContent: 0, overflow: 0, moved: 0, resized: 0, rounded: 0, square: 0, dots: 0, hands: 0, bigger: 0, rewrapped: 0 };
     window.linesThen = new Map();
     window.lineCount = (el) => {
       const range = document.createRange();
@@ -266,13 +266,19 @@ async function cleanShot(page, file) {
     setInterval(() => {
       const root = document.documentElement;
       window.late.overflow = Math.max(window.late.overflow, root.scrollWidth - root.clientWidth);
+      const host = document.querySelector('[data-swarm-layer]');
+      if (host) {
+        if (host.shadowRoot.querySelector('.dot')) window.late.dots++;
+        // the closed hand is the only cursor drawn in a 24px box
+        if (host.shadowRoot.querySelector('.agent svg[width="24"]')) window.late.hands++;
+      }
       for (const r of window.demoSwarm.regions) {
         for (const t of r.tasks) {
           if (!t.shift) continue;
           if (!seen.has(t)) {
             seen.add(t);
             window.late[t.leaf ? 'leaves' : 'containers']++;
-            window.late[t.shift.kind === 'size' ? 'resized' : 'moved']++;
+            window.late[{ size: 'resized', round: 'rounded' }[t.shift.kind] || 'moved']++;
           }
           if (t.shift.kind === 'size') {
             const r = t.el.getBoundingClientRect();
@@ -286,8 +292,13 @@ async function cleanShot(page, file) {
               if (c.kind === 'text' && !window.linesThen.has(c)) window.linesThen.set(c, window.lineCount(c.el));
             }
           }
+          // built square although its own style rounds it
+          if (t.shift.kind === 'round' && !seen.has('sq:' + t.id) && t.state !== 'wait' && parseFloat(getComputedStyle(t.el).borderTopLeftRadius) === 0) {
+            seen.add('sq:' + t.id);
+            window.late.square++;
+          }
           // still out of place although it and everything inside it is built
-          if (!t.leaf && t.left === 0 && !seen.has(t.el)) {
+          if (!t.leaf && t.shift.kind !== 'round' && t.left === 0 && !seen.has(t.el)) {
             seen.add(t.el);
             window.late.withContent++;
           }
@@ -309,6 +320,8 @@ async function cleanShot(page, file) {
   const late = await page.evaluate(() => window.late);
   check('late slip: pieces are built out of place', late.leaves > 3 && late.containers > 1, JSON.stringify(late));
   check('late slip: both kinds happen, out of place and wrong size', late.moved > 3 && late.resized > 3);
+  check('rounding: rounded pieces are built square, then rounded with the corner handle', late.rounded > 2 && late.square > 2 && late.dots > 0);
+  check('grab: a closed hand is shown while pieces are carried', late.hands > 5);
   // how often text re-wraps depends on which pieces happen to slip, so it is reported, not required
   check('wrong size: pieces really are built bigger', late.bigger > 3, `(${late.rewrapped} of ${late.textChecked} text pieces re-wrapped)`);
   check('late slip: a container is moved only after its contents are built', late.withContent > 0);

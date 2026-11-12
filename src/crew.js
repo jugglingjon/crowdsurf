@@ -31,6 +31,7 @@ const CSS_TEXT = `
 .badge { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 6px); padding: 2px 6px 3px; border-radius: 4px;
   color: #fff; font: 600 11px/1.2 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; white-space: nowrap; }
 .caret { position: absolute; left: 0; top: 0; width: 2px; border-radius: 1px; }
+.dot { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; background: #fff; border: 2px solid; }
 `;
 
 const SHAPES = {
@@ -40,8 +41,9 @@ const SHAPES = {
     `<svg width="22" height="22" viewBox="0 0 22 22" style="left:-11px;top:-11px"><path d="M11 2v18M2 11h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M11 2v18M2 11h18" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   pen: (c) =>
     `<svg width="22" height="22" viewBox="0 0 22 22" style="left:-2px;top:-20px"><path d="M2 20l2.2-7.6L13.6 3l5.4 5.4-9.4 9.4z" fill="${c}" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><path d="M2 20l5.2-5.2" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/><circle cx="8.6" cy="13.4" r="1.5" fill="#fff"/></svg>`,
-  copy: (c) =>
-    `<svg width="28" height="26" viewBox="0 0 28 26" style="left:-2px;top:-1.5px"><path d="M2 1.5v16.2l4.4-4 3 6.8 2.7-1.2-3-6.6h6z" fill="${c}" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><circle cx="20" cy="18" r="6" fill="${c}" stroke="#fff" stroke-width="1.4"/><path d="M20 15v6M17 18h6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  // a closed hand, for anything being carried: moves and duplicates
+  grab: (c) =>
+    `<svg width="24" height="24" viewBox="0 0 24 24" style="left:-12px;top:-12px"><path d="M6.6 11.2V9.4a1.7 1.7 0 0 1 3.4 0V8.6a1.7 1.7 0 0 1 3.4 0v.6a1.7 1.7 0 0 1 3.4 0v1a1.6 1.6 0 0 1 3.2 0v4.6a6.2 6.2 0 0 1-6.2 6.2h-2.2a6.2 6.2 0 0 1-5.4-3.1l-2.3-4a1.6 1.6 0 0 1 2.7-1.7z" fill="${c}" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><path d="M10 9.6v2.6M13.4 9.4v2.8M16.8 10.2v2.2" stroke="#fff" stroke-width="1.1" stroke-linecap="round" opacity=".85"/></svg>`,
   resize: (c) =>
     `<svg width="22" height="22" viewBox="0 0 22 22" style="left:-11px;top:-11px"><path d="M5 5l12 12M5 10V5h5M17 12v5h-5" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 5l12 12M5 10V5h5M17 12v5h-5" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   text: (c) =>
@@ -397,6 +399,27 @@ export class Crew {
       },
       remove() {
         svg.remove();
+      },
+    };
+  }
+
+  // A round handle at a point in page coordinates (the corner-radius control).
+  addDot(color) {
+    this.mount();
+    const el = document.createElement('div');
+    el.className = 'dot';
+    el.style.borderColor = color;
+    this.root.appendChild(el);
+    return {
+      set(x, y) {
+        const v = viewport();
+        el.style.transform = `translate(${x - v.x}px,${y - v.y}px)`;
+      },
+      opacity(o) {
+        el.style.opacity = String(o);
+      },
+      remove() {
+        el.remove();
       },
     };
   }

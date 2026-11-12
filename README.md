@@ -79,11 +79,14 @@ Set `mistakes` above zero and that share of pieces is built with a slip the agen
   the wrong size. Once it is finished a cursor drags its corner handle to the right size and the
   contents reflow as it goes
 
+- a piece with rounded corners built square, then rounded off: the cursor takes the round handle
+  inside the corner and drags it inwards, with a live radius readout
+
 `mistakes: 0.25` means roughly one piece in four. Most slips only affect the drawing: the real
 element is shown once the drawing is right, and deleted text is the real text hidden again, so no
-wrong characters ever appear in the page. The last two act on the real element, but only through running
+wrong characters ever appear in the page. The last three act on the real element, but only through running
 animations (`translate` for position; `width` and `height` for size, with matching negative margins
-so the piece keeps its footprint and its neighbours stay put). No styles are written and nothing
+so the piece keeps its footprint and its neighbours stay put; `border-radius` for corners). No styles are written and nothing
 is left behind. Both are skipped for anything they would push past the edge of the page, and the
 size slip is skipped for images and table cells.
 
@@ -122,7 +125,8 @@ Nothing is cloned or screenshotted. The swarm hides the page's real elements and
    drags out an outline, then the real element fades in under it. An image gets a crossed
    placeholder, then is uncovered from the top. A line is drawn with the pen, anchor to anchor. A
    copy waits for its original to be finished, then an agent selects a finished sibling and drags
-   a duplicate into place; the copy's boxes and icons arrive with it and its text is typed in. For text
+   a duplicate into place with a closed-hand cursor; the copy's boxes and icons arrive with it and
+   its text is typed in. For text
    ([`src/typing.js`](src/typing.js)) the untyped part is made transparent with a CSS custom
    highlight that shrinks as the caret advances, so no wrapper elements are added and nothing
    reflows.

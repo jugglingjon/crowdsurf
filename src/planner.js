@@ -214,7 +214,7 @@ export function plan(root, { ignore = '[data-swarm-ignore]' } = {}) {
       group: null, // repeated siblings this task belongs to
       copyOf: null, // the first of that group, when this is not it
       quick: false,
-      shift: null, // set while the element is deliberately out of place or the wrong size (see choreo.js)
+      shift: null, // set while the element is deliberately out of place, the wrong size or square-cornered (see choreo.js)
       ...extra,
     };
     if (parent) parent.children.push(task);

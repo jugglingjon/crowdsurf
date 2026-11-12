@@ -29,9 +29,17 @@
 //                  space the piece takes up in the page stays the same and nothing
 //                  around it is pushed about.
 //
-// A container waits in its wrong state until everything inside it is built. Both
-// are animations only: no styles are written, and cancelling them puts the element
-// back exactly.
+//   sharp corners  a piece with rounded corners is built square. As soon as it is
+//                  drawn the cursor takes the round handle inside its corner and
+//                  drags it inwards, and the corners round off to their real radius.
+//                  The radius is a running animation of border-radius.
+//
+// A container waits out of place or at the wrong size until everything inside it is
+// built (corners are rounded straight away). All three are animations only: no
+// styles are written, and cancelling them puts the element back exactly.
+//
+// While anything is being carried (a duplicate, or a piece being moved) the cursor
+// is a closed hand.
 //
 // With `dillyDally` on, an agent that has just finished a job sometimes takes a
 // moment before the next: it drifts off and waits, or runs along under a line of
@@ -115,9 +123,16 @@ function addCleanup(task, fn) {
 /** Build `task` with `agent`. */
 export async function perform(agent, task, ctx) {
   const late = displace(task, ctx);
-  if (late && task.leaf) addCleanup(task, () => clearShift(task));
+  const corners = late && task.shift.kind === 'round';
+  // these two are put right before the task counts as built, whatever ends it
+  if (late && (task.leaf || corners)) addCleanup(task, () => clearShift(task));
   const result = await build(agent, task, ctx);
   if (!late) return result;
+  if (corners) {
+    const rounded = result && task.shift && (await roundOff(agent, task, ctx));
+    clearShift(task);
+    return rounded && result;
+  }
   if (!task.leaf) {
     // a container is put right later, once its contents are in
     if (task.shift) ctx.later(task);
@@ -139,9 +154,21 @@ export function clearShift(task) {
   task.shift = null;
 }
 
-// Maybe start building this task out of place or at the wrong size. True if so.
-// Either way the state lives in `task.shift`: the running animation, the keyframe
-// that holds the wrong state, and the keyframe for the right one.
+const CORNERS = ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius'];
+const MIN_RADIUS = 5; // corners rounder than this are worth a rounding slip
+
+// A corner radius in px as it actually renders (a pill's 999px is really half its height).
+function radiusPx(value, r) {
+  const first = String(value).split(' ')[0];
+  const n = parseFloat(first) || 0;
+  const most = Math.min(r.width, r.height) / 2;
+  return Math.min(first.endsWith('%') ? (n / 100) * Math.min(r.width, r.height) : n, most);
+}
+
+// Maybe start building this task out of place, at the wrong size, or with square
+// corners. True if so. Either way the state lives in `task.shift`: the running
+// animation, the keyframe that holds the wrong state, and the keyframe for the
+// right one.
 function displace(task, ctx) {
   if (Math.random() >= ctx.mistakes() * LATE_SHARE) return false;
   const { el } = task;
@@ -160,9 +187,26 @@ function displace(task, ctx) {
   // Wrong size: not for media (it would distort), rules, or table parts (the table
   // would re-flow around them).
   const sizable = task.kind !== 'media' && !(task.kind === 'line' && task.leaf) && !cs.display.startsWith('table');
+  // Square corners: only where there is a visible shape with rounding to speak of.
+  const shaped = task.kind === 'box' || task.kind === 'media' || (task.kind === 'text' && task.decorated);
+  const radius = shaped && Math.min(r.width, r.height) >= 24 ? radiusPx(cs.borderTopLeftRadius, r) : 0;
+  const kinds = ['place'];
+  if (sizable) kinds.push('size');
+  if (radius >= MIN_RADIUS) kinds.push('round');
+  const kind = kinds[Math.floor(Math.random() * kinds.length)];
+
   let hold = null;
   let rest = null;
-  if (sizable && Math.random() < 0.5) {
+  if (kind === 'round') {
+    hold = {};
+    rest = {};
+    for (const corner of CORNERS) {
+      hold[corner] = '0px';
+      // as rendered, so the rounding is spread over the whole drag (see radiusPx)
+      rest[corner] = `${radiusPx(cs[corner], r)}px`;
+    }
+    task.shift = { kind: 'round', radius };
+  } else if (kind === 'size') {
     let ew = Math.random() < 0.75 ? clamp(r.width * rand(0.12, 0.35), 16, 120) : 0;
     if (!fits(ew) || r.left < 0) ew = 0;
     const eh = !ew || Math.random() < 0.45 ? clamp(r.height * rand(0.12, 0.35), 12, 90) : 0;
@@ -216,7 +260,7 @@ export async function moveBack(agent, task, ctx) {
     agent.place(...intoView(g.x, g.y));
   };
   try {
-    if (resizing) agent.setShape('resize');
+    agent.setShape(resizing ? 'resize' : 'grab');
     if (!(await crew.tween(220 / speed(), follow, live))) return false;
     const ms = (resizing ? 460 : 320) / speed();
     const { hold, rest, anim } = task.shift;
@@ -230,6 +274,54 @@ export async function moveBack(agent, task, ctx) {
     }, live);
   } finally {
     selection.remove();
+  }
+}
+
+/**
+ * Round off a piece that was built with square corners: take the round handle
+ * inside its top-left corner and drag it inwards. Resolves false if called off.
+ * The caller clears the shift afterwards.
+ */
+async function roundOff(agent, task, ctx) {
+  const { el } = task;
+  const crew = agent.crew;
+  const { radius } = task.shift;
+  // the handle sits on the corner's diagonal, further in the rounder the corner
+  const handle = (k) => {
+    const r = pageRect(el);
+    const d = Math.min(9 + radius * k * 0.75, Math.min(r.w, r.h) / 2);
+    return { x: r.x + d, y: r.y + d };
+  };
+  if (!(await agent.travel(() => handle(0), ctx))) return false;
+
+  const selection = crew.addRect(agent.color, { handles: true, badge: true });
+  const dot = crew.addDot(agent.color);
+  addCleanup(task, () => {
+    selection.remove();
+    dot.remove();
+  });
+  const show = (k) => {
+    const r = pageRect(el);
+    selection.set(r.x, r.y, r.w, r.h, `Radius ${Math.round(radius * k)}`);
+    const h = handle(k);
+    dot.set(h.x, h.y);
+    agent.place(...intoView(h.x, h.y));
+  };
+  try {
+    if (!(await crew.tween(240 / ctx.speed(), () => show(0), ctx.live))) return false;
+    const ms = clamp(260 + radius * 8, 320, 620) / ctx.speed();
+    const { hold, rest, anim } = task.shift;
+    anim.cancel();
+    task.shift.anim = el.animate([hold, rest], { duration: ms, easing: 'ease-in-out', fill: 'both' });
+    if (!(await crew.tween(ms, (t) => show(easeInOut(t)), ctx.live))) return false;
+    return await crew.tween(150 / ctx.speed(), (t) => {
+      show(1);
+      selection.opacity(1 - t);
+      dot.opacity(1 - t);
+    }, ctx.live);
+  } finally {
+    selection.remove();
+    dot.remove();
   }
 }
 
@@ -366,6 +458,7 @@ async function dragOut(agent, task, ctx, look) {
       }, ctx);
     }
     if (ok) {
+      if (moved) agent.setShape('grab');
       ok = await crew.tween(
         300 / ctx.speed(),
         (t) => {
@@ -553,7 +646,7 @@ async function duplicate(agent, task, ctx, beforeShow) {
   if (!(await crew.tween(130 / ctx.speed(), select, ctx.live))) return false;
 
   // drag a copy across, taking on the new element's size on the way
-  agent.setShape('copy');
+  agent.setShape('grab');
   const ghost = crew.addRect(agent.color, { fill: true });
   addCleanup(task, () => ghost.remove());
   const s0 = pageRect(source.el);
