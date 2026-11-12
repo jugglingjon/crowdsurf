@@ -9,7 +9,7 @@ live size readout, images sweep in over a placeholder, lines are drawn with the 
 pieces are duplicated from a finished one, and text is typed into place. Still to come: packaged
 builds and a release, then guides and sound.
 
-**Demo:** https://jugglingjon.github.io/swarm-web/
+**Demo:** https://jugglingjon.github.io/crowdsurf/
 
 ## Use
 
